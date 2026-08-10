@@ -23,7 +23,8 @@ import { EventDetailPage } from '@/pages/admin/EventDetailPage';
 import { EventParticipantsPage } from '@/pages/admin/EventParticipantsPage';
 import { EventWinnersPage } from '@/pages/admin/EventWinnersPage';
 import { SettingsPage } from '@/pages/admin/SettingsPage';
-import { LivePage } from '@/pages/live/LivePage';
+import { AdminLivePage } from '@/pages/live/admin/AdminLivePage';
+import { ParticipantLivePage } from '@/pages/live/participant/ParticipantLivePage';
 
 export const AppRoutes = () => (
   <Routes>
@@ -61,11 +62,11 @@ export const AppRoutes = () => (
     </Route>
 
     <Route element={<LiveLayout />}>
-      <Route path={ROUTES.ADMIN_LIVE} element={<LivePage />} />
+      <Route path={ROUTES.ADMIN_LIVE} element={<AdminLivePage />} />
     </Route>
 
     <Route element={<PublicEventLayout />}>
-      <Route path={ROUTES.PUBLIC_LIVE} element={<LivePage />} />
+      <Route path={ROUTES.PUBLIC_LIVE} element={<ParticipantLivePage />} />
     </Route>
 
     <Route path="*" element={<Navigate to={ROUTES.ADMIN_LOGIN} replace />} />

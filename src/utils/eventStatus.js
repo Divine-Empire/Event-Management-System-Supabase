@@ -15,8 +15,17 @@ export const EVENT_STATUS = {
   ENDED: 'ENDED'
 };
 
-export const getLiveMs = (event) => {
+export const getLiveMs = (event, serviceType = 'NABL') => {
   if (!event) return 0;
+  const isTs = String(serviceType).toUpperCase().includes('TOTAL');
+  const targetDateTime = isTs 
+    ? (event.liveDateTimeTs || event.liveDateTime) 
+    : (event.liveDateTimeNabl || event.liveDateTime);
+
+  if (targetDateTime) {
+    const ms = new Date(targetDateTime).getTime();
+    if (!isNaN(ms)) return ms;
+  }
   if (event.liveDateTime) {
     const ms = new Date(event.liveDateTime).getTime();
     if (!isNaN(ms)) return ms;
@@ -58,8 +67,8 @@ export const getEndMs = (event) => {
   return Infinity;
 };
 
-export const getSecondsToLive = (event) => {
-  const liveMs = getLiveMs(event);
+export const getSecondsToLive = (event, serviceType = 'NABL') => {
+  const liveMs = getLiveMs(event, serviceType);
   if (!liveMs) return 0;
   return Math.floor((liveMs - Date.now()) / 1000);
 };

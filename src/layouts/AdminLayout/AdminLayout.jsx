@@ -9,7 +9,7 @@ export const AdminLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-slate-50 relative overflow-x-hidden">
+    <div className="flex h-screen bg-slate-50 relative overflow-hidden">
       {/* Mobile Backdrop Overlay */}
       {mobileOpen && (
         <div 
@@ -26,7 +26,7 @@ export const AdminLayout = () => {
       />
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-200 ${collapsed ? 'md:ml-18' : 'md:ml-70'}`}>
+      <div className={`flex-1 flex flex-col h-screen overflow-hidden min-w-0 transition-all duration-200 ${collapsed ? 'md:ml-18' : 'md:ml-70'}`}>
         <Header 
           sidebarHidden={collapsed}
           onToggleSidebar={() => {
@@ -38,7 +38,7 @@ export const AdminLayout = () => {
           }}
         />
 
-        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto min-w-0">
+        <main className="flex-1 flex flex-col min-h-0 p-3 sm:p-4 max-w-7xl w-full mx-auto min-w-0 overflow-y-auto">
           <Outlet />
         </main>
 

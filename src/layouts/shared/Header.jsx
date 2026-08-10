@@ -62,11 +62,11 @@ export const Header = ({ onToggleSidebar, sidebarHidden }) => {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40 w-full">
+    <header className="h-12 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40 w-full">
       {/* Left side: Hamburger Toggle Button (only when sidebar is hidden or on mobile) */}
       <button 
         type="button" 
-        className={`w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 items-center justify-center hover:bg-slate-50 cursor-pointer transition-all active:scale-95 shrink-0 ${
+        className={`w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-700 items-center justify-center hover:bg-slate-50 cursor-pointer transition-all active:scale-95 shrink-0 ${
           sidebarHidden ? 'flex' : 'flex md:hidden'
         }`}
         onClick={onToggleSidebar}

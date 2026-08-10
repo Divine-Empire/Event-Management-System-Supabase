@@ -259,7 +259,22 @@ export const EventProvider = ({ children }) => {
 export const useEvent = () => {
   const context = useContext(EventContext);
   if (!context) {
-    throw new Error('useEvent must be used within an EventProvider');
+    return {
+      eventData: null,
+      eventsList: [],
+      activeEventId: null,
+      setActiveEvent: () => {},
+      updateEventDetails: () => {},
+      participants: [],
+      addParticipants: () => {},
+      deleteParticipant: () => {},
+      winners: [],
+      saveWinnersRoster: () => {},
+      notifications: [],
+      markNotificationsRead: () => {},
+      clearNotifications: () => {},
+      refreshEventContext: () => {}
+    };
   }
   return context;
 };

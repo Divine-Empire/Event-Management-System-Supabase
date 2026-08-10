@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Plus, Users, Edit2, Trash2, Check, X, Eye, EyeOff, ShieldCheck, UserCheck, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { authService } from '@/services/authService';
+import { ConfirmModal } from '@/components/common/ConfirmModal';
 
 export const SettingsPage = () => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showPasswordMap, setShowPasswordMap] = useState({});
+  const [deleteUserConfirm, setDeleteUserConfirm] = useState({ isOpen: false, user: null });
 
   // Add User Form State
   const [addForm, setAddForm] = useState({
@@ -116,15 +118,17 @@ export const SettingsPage = () => {
     }
   };
 
-  const handleDelete = async (user) => {
+  const handleDelete = (user) => {
     if (user.username === 'admin') {
       toast.error('The primary system "admin" account cannot be deleted.');
       return;
     }
+    setDeleteUserConfirm({ isOpen: true, user });
+  };
 
-    if (!window.confirm(`Are you sure you want to delete user "${user.username}"?`)) {
-      return;
-    }
+  const handleConfirmDeleteUser = async () => {
+    const user = deleteUserConfirm.user;
+    if (!user) return;
 
     try {
       const res = await authService.deleteAdmin(user.id);
@@ -495,6 +499,18 @@ export const SettingsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Delete User Confirm Modal */}
+      <ConfirmModal
+        isOpen={deleteUserConfirm.isOpen}
+        title="Delete User Account"
+        message={`Are you sure you want to delete user account "${deleteUserConfirm.user?.username || ''}"? This user will no longer be able to log in.`}
+        confirmText="Delete User"
+        cancelText="Cancel"
+        type="danger"
+        onConfirm={handleConfirmDeleteUser}
+        onClose={() => setDeleteUserConfirm({ isOpen: false, user: null })}
+      />
     </div>
   );
 };

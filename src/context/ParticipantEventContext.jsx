@@ -18,8 +18,6 @@ const saveParticipantSession = (eventId, participant) => {
     const value = JSON.stringify(participant);
     sessionStorage.setItem(participantKey(eventId), value);
     sessionStorage.setItem(SESSION_KEY, value);
-    localStorage.setItem(participantKey(eventId), value);
-    localStorage.setItem(SESSION_KEY, value);
   } catch (error) {
     console.error('Failed to persist participant session:', error);
   }
@@ -32,10 +30,6 @@ const readParticipantSession = (eventId) => {
     if (scoped) return JSON.parse(scoped);
     const current = sessionStorage.getItem(SESSION_KEY);
     if (current) return JSON.parse(current);
-    const localScoped = localStorage.getItem(participantKey(eventId));
-    if (localScoped) return JSON.parse(localScoped);
-    const localCurrent = localStorage.getItem(SESSION_KEY);
-    if (localCurrent) return JSON.parse(localCurrent);
   } catch (error) {
     console.error('Failed to restore participant session:', error);
   }

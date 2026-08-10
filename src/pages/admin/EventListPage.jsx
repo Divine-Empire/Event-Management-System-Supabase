@@ -6,12 +6,15 @@ import { computeEventStatus } from '@/utils/eventStatus';
 import { Calendar, Plus, Link2, Copy, Trash2, Check, Zap, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { ConfirmModal } from '@/components/common/ConfirmModal';
+
 export const EventListPage = () => {
   const navigate = useNavigate();
   const { eventsList, activeEventId, setActiveEvent, deleteEvent } = useEvent();
   const [copiedId, setCopiedId] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, eventId: null, eventName: '' });
 
   const handleCopyLink = (event, e) => {
     e.stopPropagation();
@@ -35,11 +38,15 @@ export const EventListPage = () => {
     setIsCreateModalOpen(true);
   };
 
-  const handleDelete = (id, e) => {
+  const handleDeleteClick = (event, e) => {
     e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this event? All participant and winner data for this event will be deleted.')) {
-      deleteEvent(id);
-      toast.success('Event deleted');
+    setDeleteConfirm({ isOpen: true, eventId: event.id, eventName: event.name });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirm.eventId) {
+      deleteEvent(deleteConfirm.eventId);
+      toast.success(`Event "${deleteConfirm.eventName || ''}" deleted successfully`);
     }
   };
 
@@ -59,12 +66,12 @@ export const EventListPage = () => {
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex-1 flex flex-col min-h-0 gap-3.5 sm:gap-4 overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Events Management</h1>
-          <p className="text-xs text-slate-500 mt-1">Manage customer reward events, import participants, and host live draws</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Events Management</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Manage customer reward events, import participants, and host live draws</p>
         </div>
 
         <button
@@ -73,7 +80,7 @@ export const EventListPage = () => {
             setEditingEvent(null);
             setIsCreateModalOpen(true);
           }}
-          className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-5 py-2.5 rounded-xl transition-all shadow-sm text-xs flex items-center gap-2 cursor-pointer shrink-0"
+          className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-xs text-xs flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus size={16} />
           Create New Event
@@ -82,27 +89,27 @@ export const EventListPage = () => {
 
       {/* Events Table / Grid */}
       {eventsList.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center flex flex-col items-center">
-          <Calendar size={48} className="text-slate-300 mb-3" />
-          <h3 className="text-lg font-bold text-slate-800">No Events Created Yet</h3>
-          <p className="text-xs text-slate-500 max-w-sm mt-1 mb-6">Create your first customer reward event to import participants and share event links.</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center flex flex-col items-center">
+          <Calendar size={40} className="text-slate-300 mb-2" />
+          <h3 className="text-base font-bold text-slate-800">No Events Created Yet</h3>
+          <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">Create your first customer reward event to import participants and share event links.</p>
           <button
             type="button"
             onClick={() => {
               setEditingEvent(null);
               setIsCreateModalOpen(true);
             }}
-            className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer"
+            className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer"
           >
             <Plus size={16} />
             Create Event
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto w-full">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex-1 flex flex-col min-h-0">
+          <div className="overflow-auto flex-1 min-h-0 w-full">
             <table className="w-full min-w-[650px] text-left border-collapse text-xs">
-              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
                 <tr>
                   <th className="p-4">Event Name</th>
                   <th className="p-4">Dates</th>
@@ -202,7 +209,7 @@ export const EventListPage = () => {
                           {/* Delete Button */}
                           <button
                             type="button"
-                            onClick={(e) => handleDelete(evt.id, e)}
+                            onClick={(e) => handleDeleteClick(evt, e)}
                             title="Delete Event"
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                           >
@@ -231,6 +238,18 @@ export const EventListPage = () => {
           setIsCreateModalOpen(false);
           setEditingEvent(null);
         }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Event"
+        message={`Are you sure you want to delete "${deleteConfirm.eventName || 'this event'}"? All associated participants and winner logs will be permanently deleted.`}
+        confirmText="Delete Event"
+        cancelText="Cancel"
+        type="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteConfirm({ isOpen: false, eventId: null, eventName: '' })}
       />
     </div>
   );

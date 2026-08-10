@@ -33,8 +33,8 @@ export const AdminSidebar = ({ collapsed, mobileOpen, onCloseMobile }) => {
   return (
     <aside className={`fixed top-0 bottom-0 left-0 bg-white border-r border-slate-200 z-50 flex flex-col transition-all duration-200 shadow-sm ${collapsed ? 'w-18' : 'w-70'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
       {/* Brand Header */}
-      <div className="h-16 flex items-center px-3.5 border-b border-slate-100 flex-shrink-0 overflow-hidden min-w-0">
-        <CompanyLogo size={collapsed ? 'sm' : 'md'} showText={!collapsed} />
+      <div className="h-12 flex items-center px-3.5 border-b border-slate-200 flex-shrink-0 overflow-hidden min-w-0">
+        <CompanyLogo size="sm" showText={!collapsed} />
       </div>
 
       {/* Active Event Indicator Pill */}
@@ -44,7 +44,7 @@ export const AdminSidebar = ({ collapsed, mobileOpen, onCloseMobile }) => {
             <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 animate-pulse"></div>
             <div className="flex flex-col min-w-0 flex-1">
               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">SELECTED EVENT</span>
-              <span className="font-extrabold text-blue-900 truncate">{eventData.name || 'Default Event'}</span>
+              <span className="font-extrabold text-blue-900 break-words leading-tight">{eventData.name || 'Default Event'}</span>
             </div>
           </div>
         </div>

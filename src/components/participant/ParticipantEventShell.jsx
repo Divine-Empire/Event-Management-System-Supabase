@@ -19,52 +19,55 @@ export const ParticipantEventShell = ({ children, showPrizePreview = true }) => 
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col w-full">
-      <header className="w-full bg-[#0b1739] text-white px-4 sm:px-8 py-3.5 border-b border-blue-900/40 flex items-center justify-between shadow-md sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-xs shrink-0">
-            <Sparkles size={20} />
-          </div>
-          <div>
-            <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight text-white">{event.name}</h1>
-            <span className="text-[10px] font-extrabold tracking-widest text-slate-400 uppercase block">
+      <header className="w-full bg-[#0b1739] text-white px-3 sm:px-8 py-2.5 sm:py-3 border-b border-blue-900/40 flex items-center justify-between shadow-md sticky top-0 z-40">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <img 
+            src={event?.logo || '/logo.jpg'} 
+            alt="Company Logo" 
+            className="h-8 sm:h-9 w-auto max-w-[100px] object-contain rounded-xl border border-slate-100 bg-white p-1 shadow-xs shrink-0" 
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+          <div className="min-w-0">
+            <h1 className="text-xs sm:text-base font-black tracking-tight leading-tight text-white truncate max-w-[130px] sm:max-w-none">{event.name}</h1>
+            <span className="text-[9px] font-extrabold tracking-widest text-slate-400 uppercase block truncate">
               {event?.sponsor || 'Divine Empire'}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 sm:gap-3.5">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {verifiedParticipant ? (
             <>
               {verifiedParticipant.luckyNumber ? (
-                <div className="bg-amber-500/10 border border-amber-400/30 text-amber-300 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-xs">
-                  <Ticket size={14} className="text-amber-400 shrink-0" />
-                  <span>Lucky Number #{verifiedParticipant.luckyNumber}</span>
+                <div className="bg-amber-500/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 shadow-xs">
+                  <Ticket size={13} className="text-amber-400 shrink-0" />
+                  <span>#{verifiedParticipant.luckyNumber}</span>
                 </div>
               ) : (
-                <div className="bg-purple-500/10 border border-purple-400/30 text-purple-300 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-xs">
-                  <Sparkles size={14} className="text-amber-400 shrink-0" />
-                  <span>Selecting Lucky Number</span>
+                <div className="bg-purple-500/10 border border-purple-400/30 text-purple-300 px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 shadow-xs">
+                  <Sparkles size={13} className="text-amber-400 shrink-0" />
+                  <span>Selecting Number</span>
                 </div>
               )}
 
-              <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700 text-xs font-bold shadow-xs">
-                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-[10px] sm:text-[11px] shrink-0">
+              <div className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700 text-[11px] font-bold shadow-xs">
+                <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-[10px] shrink-0">
                   {(verifiedParticipant.customerName || verifiedParticipant.name || 'P').charAt(0).toUpperCase()}
                 </div>
-                <span className="text-slate-200 hidden sm:inline">{verifiedParticipant.customerName || verifiedParticipant.name}</span>
+                <span className="text-slate-200 hidden sm:inline max-w-[100px] truncate">{verifiedParticipant.customerName || verifiedParticipant.name}</span>
               </div>
 
               <button
                 type="button"
                 onClick={handleLogout}
-                className="p-1.5 sm:p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                 title="Logout / Change Account"
               >
-                <LogOut size={18} />
+                <LogOut size={16} />
               </button>
             </>
           ) : (
-            <span className="bg-blue-500/10 border border-blue-400/30 text-blue-300 px-3 py-1 rounded-full text-xs font-bold">
+            <span className="bg-blue-500/10 border border-blue-400/30 text-blue-300 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold shrink-0 whitespace-nowrap">
               Participant Verification
             </span>
           )}
@@ -98,16 +101,19 @@ export const ParticipantEventShell = ({ children, showPrizePreview = true }) => 
         )}
 
         <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-blue-900 text-white rounded-3xl p-5 shadow-lg border border-blue-800/60 relative overflow-hidden flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-0.5 rounded-full">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-0.5 rounded-full inline-block">
                 {event.sponsor || 'Divine Empire Event'}
               </span>
-              <h1 className="text-xl sm:text-2xl font-black text-white mt-1 tracking-tight">{event.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-white mt-1.5 tracking-tight">{event.name}</h1>
+              <p className="text-slate-300 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">
+                {event.description || `Welcome to ${event.name}! Register your details and choose your 3-digit lucky number to participate in our exclusive live prize draw.`}
+              </p>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 py-1 rounded-xl text-xs text-slate-200 font-semibold shrink-0">
-              <Calendar size={14} className="text-amber-400" />
+            <div className="flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 py-1.5 rounded-xl text-xs text-slate-200 font-semibold shrink-0 self-start">
+              <Calendar size={14} className="text-amber-400 shrink-0" />
               <span>
                 Live Draw: <strong>
                   {verifiedParticipant?.serviceType === 'TOTAL_STATION'
@@ -117,10 +123,6 @@ export const ParticipantEventShell = ({ children, showPrizePreview = true }) => 
               </span>
             </div>
           </div>
-
-          {event.description && (
-            <p className="text-slate-300 text-xs leading-relaxed">{event.description}</p>
-          )}
         </div>
 
         {children}

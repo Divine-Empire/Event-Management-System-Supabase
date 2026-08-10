@@ -3,7 +3,17 @@ import { supabase } from '@/lib/supabase';
 const DEFAULT_PRIZES = [
   { rank: 1, title: 'Rank 1 Prize', name: 'Grand Prize - Car', image: '' },
   { rank: 2, title: 'Rank 2 Prize', name: 'Second Prize - Smartphone', image: '' },
-  { rank: 3, title: 'Rank 3 Prize', name: 'Third Prize - Smart TV', image: '' }
+  { rank: 3, title: 'Rank 3 Prize', name: 'Third Prize - Smart TV', image: '' },
+  { rank: 4, title: 'Rank 4 Prize', name: 'Fourth Prize - Tablet', image: '' },
+  { rank: 5, title: 'Rank 5 Prize', name: 'Fifth Prize - Smartwatch', image: '' }
+];
+
+const DEFAULT_PRIZES_TS = [
+  { rank: 1, title: 'Rank 1 Prize', name: 'Total Station Grand Prize', image: '' },
+  { rank: 2, title: 'Rank 2 Prize', name: 'Total Station Second Prize', image: '' },
+  { rank: 3, title: 'Rank 3 Prize', name: 'Total Station Third Prize', image: '' },
+  { rank: 4, title: 'Rank 4 Prize', name: 'Total Station Fourth Prize', image: '' },
+  { rank: 5, title: 'Rank 5 Prize', name: 'Total Station Fifth Prize', image: '' }
 ];
 
 const mapEventFromDb = (row) => {
@@ -26,8 +36,12 @@ const mapEventFromDb = (row) => {
   const endDateTimeStr = row.end_date ? new Date(row.end_date).toISOString() : '';
   const endDate = endDateTimeStr ? endDateTimeStr.slice(0, 10) : (row.end_date || '');
 
-  const prizesNabl = Array.isArray(row.prizes_nabl) && row.prizes_nabl.length > 0 ? row.prizes_nabl : (Array.isArray(row.prizes) && row.prizes.length > 0 ? row.prizes : DEFAULT_PRIZES);
-  const prizesTs = Array.isArray(row.prizes_ts) && row.prizes_ts.length > 0 ? row.prizes_ts : (Array.isArray(row.prizes) && row.prizes.length > 0 ? row.prizes : DEFAULT_PRIZES);
+  const prizesNabl = Array.isArray(row.prizes_nabl) && row.prizes_nabl.length > 0
+    ? row.prizes_nabl
+    : (Array.isArray(row.prizes) && row.prizes.length > 0 ? row.prizes : DEFAULT_PRIZES);
+  const prizesTs = Array.isArray(row.prizes_ts) && row.prizes_ts.length > 0
+    ? row.prizes_ts
+    : DEFAULT_PRIZES_TS;
 
   return {
     id: row.id,
@@ -254,7 +268,7 @@ export const eventService = {
     const event = await eventService.getEvent(eventId);
     if (!event) return DEFAULT_PRIZES;
     if (serviceType === 'TS' || serviceType === 'TOTAL_STATION') {
-      return event.prizesTs && event.prizesTs.length > 0 ? event.prizesTs : DEFAULT_PRIZES;
+      return event.prizesTs && event.prizesTs.length > 0 ? event.prizesTs : DEFAULT_PRIZES_TS;
     }
     return event.prizesNabl && event.prizesNabl.length > 0 ? event.prizesNabl : DEFAULT_PRIZES;
   },

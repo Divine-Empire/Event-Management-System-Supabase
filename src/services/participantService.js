@@ -495,6 +495,7 @@ export const participantService = {
 
   saveWinners: async (eventId, winnersList, serviceType = 'NABL') => {
     if (!eventId || !Array.isArray(winnersList)) return [];
+    const table = getTableForServiceType(serviceType);
 
     try {
       for (const w of winnersList) {
@@ -506,10 +507,22 @@ export const participantService = {
           const pId = tp.id || tp.participantId || w.participantId || w.id;
           if (pId) {
             await supabase
+              .from(table)
+              .update({
+                winner: true,
+                winner_rank: Number(w.rank || w.winnerRank || tp.winnerRank),
+                prize_name: w.prizeName || w.name || tp.prizeName,
+                published: true,
+                drawn_at: w.drawnAt || new Date().toISOString()
+              })
+              .eq('id', pId);
+
+            // Fallback sync to main event_participants table if id exists
+            await supabase
               .from('event_participants')
               .update({
                 winner: true,
-                winner_rank: w.rank || w.winnerRank || tp.winnerRank,
+                winner_rank: Number(w.rank || w.winnerRank || tp.winnerRank),
                 prize_name: w.prizeName || w.name || tp.prizeName,
                 published: true,
                 drawn_at: w.drawnAt || new Date().toISOString()
@@ -520,38 +533,43 @@ export const participantService = {
       }
       return await participantService.getWinners(eventId, serviceType);
     } catch (err) {
-      console.error('saveWinners exception:', err);
+      console.error(`saveWinners exception on ${table}:`, err);
       return [];
     }
   },
 
   publishWinners: async (eventId, unPublishedWinners, serviceType = null) => {
     if (!eventId) return [];
+    const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants';
     try {
-      let query = supabase
-        .from('event_participants')
+      await supabase
+        .from(table)
         .update({ published: true })
         .eq('event_id', eventId)
         .eq('winner', true);
 
       if (serviceType) {
-        const sType = normalizeServiceType(serviceType);
-        query = query.eq('service_type', sType);
+        await supabase
+          .from('event_participants')
+          .update({ published: true })
+          .eq('event_id', eventId)
+          .eq('service_type', normalizeServiceType(serviceType))
+          .eq('winner', true);
       }
 
-      await query;
       return await participantService.getWinners(eventId, serviceType);
     } catch (err) {
-      console.error('publishWinners exception:', err);
+      console.error(`publishWinners exception on ${table}:`, err);
       return [];
     }
   },
 
   resetWinners: async (eventId, serviceType = null) => {
     if (!eventId) return [];
+    const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants';
     try {
-      let query = supabase
-        .from('event_participants')
+      await supabase
+        .from(table)
         .update({
           winner: false,
           winner_rank: null,
@@ -562,14 +580,22 @@ export const participantService = {
         .eq('event_id', eventId);
 
       if (serviceType) {
-        const sType = normalizeServiceType(serviceType);
-        query = query.eq('service_type', sType);
+        await supabase
+          .from('event_participants')
+          .update({
+            winner: false,
+            winner_rank: null,
+            prize_name: null,
+            published: false,
+            drawn_at: null
+          })
+          .eq('event_id', eventId)
+          .eq('service_type', normalizeServiceType(serviceType));
       }
 
-      await query;
       return [];
     } catch (err) {
-      console.error('resetWinners exception:', err);
+      console.error(`resetWinners exception on ${table}:`, err);
       return [];
     }
   }

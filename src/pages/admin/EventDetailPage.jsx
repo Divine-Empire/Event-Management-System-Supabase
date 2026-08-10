@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { formatDateOnly, formatDateTime } from '@/utils/formatters';
 
+import { ConfirmModal } from '@/components/common/ConfirmModal';
+
 export const EventDetailPage = ({ initialTab = 'overview' }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -32,6 +34,7 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
     if (location.pathname.includes('/winners')) return 'winners';
     return initialTab;
   }); // overview, participants, winners
+  const [deleteParticipantConfirm, setDeleteParticipantConfirm] = useState({ isOpen: false, pId: null, serviceType: null, customerName: '' });
 
   useEffect(() => {
     if (location.pathname.includes('/participants')) {
@@ -136,10 +139,20 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
     setActiveTab('participants');
   };
 
-  const handleDeleteParticipant = async (pId, serviceType) => {
-    if (window.confirm('Delete this participant?')) {
-      await deleteParticipant(pId, event.id, serviceType);
+  const promptDeleteParticipant = (p) => {
+    setDeleteParticipantConfirm({
+      isOpen: true,
+      pId: p.id,
+      serviceType: p.serviceType,
+      customerName: p.customerName || p.name || 'this participant'
+    });
+  };
+
+  const handleConfirmDeleteParticipant = async () => {
+    if (deleteParticipantConfirm.pId) {
+      await deleteParticipant(deleteParticipantConfirm.pId, event.id, deleteParticipantConfirm.serviceType);
       await loadData();
+      toast.success('Participant deleted successfully');
     }
   };
 
@@ -236,21 +249,21 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
       </button>
 
       {/* Hero Header Banner Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white rounded-3xl p-5 sm:p-6 md:p-8 shadow-xl border border-blue-900/40 relative overflow-hidden flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-5">
+      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-blue-900/40 relative overflow-hidden flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="flex items-center gap-4 sm:gap-5 z-10">
+        <div className="flex items-center gap-3.5 sm:gap-4 z-10 min-w-0 flex-1">
           {event.logo ? (
-            <img src={event.logo} alt="Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-2xl border-2 border-white/20 bg-slate-900 p-1 shadow-md shrink-0" />
+            <img src={event.logo} alt="Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl border-2 border-white/20 bg-slate-900 p-1 shadow-md shrink-0" />
           ) : (
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-black flex items-center justify-center text-lg sm:text-xl shadow-lg border border-white/20 shrink-0">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-black flex items-center justify-center text-base sm:text-lg shadow-md border border-white/20 shrink-0">
               {event.name.substring(0, 2).toUpperCase()}
             </div>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight truncate">{event.name}</h1>
-              <span className={`px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider border shadow-sm ${
+              <h1 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white tracking-tight break-words leading-snug">{event.name}</h1>
+              <span className={`px-2.5 py-0.5 sm:px-3 sm:py-0.5 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider border shadow-xs ${
                 computedStatus === 'LIVE' ? 'bg-red-500/20 text-red-300 border-red-500/50 animate-pulse' :
                 computedStatus === 'ENDED' ? 'bg-slate-800 text-slate-300 border-slate-700' :
                 computedStatus === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
@@ -268,11 +281,11 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
         </div>
 
         {/* Quick Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 z-10 w-full sm:w-auto shrink-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 z-10 shrink-0">
           <button
             type="button"
             onClick={handleCopyLink}
-            className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all backdrop-blur-sm active:scale-95 w-full sm:w-auto"
+            className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all backdrop-blur-sm active:scale-95 whitespace-nowrap"
           >
             {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} className="text-amber-300" />}
             <span>{copied ? 'Link Copied!' : 'Share Link'}</span>
@@ -281,10 +294,10 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
           <button
             type="button"
             onClick={() => navigate(`/admin/live/${event.id}`)}
-            className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-red-950/50 transition-all active:scale-95 w-full sm:w-auto"
+            className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold px-4.5 py-2 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-red-950/50 transition-all active:scale-95 whitespace-nowrap"
           >
-            <PlayCircle size={18} />
-            <span>Start Live Draw Console</span>
+            <PlayCircle size={17} />
+            <span>Start Live Draw</span>
           </button>
         </div>
       </div>
@@ -428,18 +441,24 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
                 {prizesNabl.map((p) => {
                   const img = p.image || p.img || p.picture;
                   return (
-                    <div key={p.rank} className="bg-blue-50/40 border border-blue-100 rounded-2xl p-4 flex flex-col items-center justify-between text-center gap-3 transition-all hover:border-blue-300 hover:shadow-sm">
-                      <span className="bg-blue-900 text-white font-extrabold text-xs px-3 py-1 rounded-lg">
-                        Rank {p.rank}
-                      </span>
-                      <div className="w-20 h-20 rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center shadow-xs">
+                    <div key={p.rank} className="bg-white border border-blue-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative">
+                      <div className="absolute top-2.5 left-2.5 z-10">
+                        <span className="bg-blue-900 text-white font-black text-[11px] px-2.5 py-1 rounded-lg shadow-sm">
+                          Rank {p.rank}
+                        </span>
+                      </div>
+                      <div className="w-full h-40 bg-gradient-to-b from-slate-50 to-blue-50/30 p-3 flex items-center justify-center overflow-hidden relative">
                         {img ? (
-                          <img src={img} alt={p.name} className="w-full h-full object-contain" />
+                          <img src={img} alt={p.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-xs" />
                         ) : (
-                          <Gift size={32} className="text-blue-300" />
+                          <div className="w-14 h-14 rounded-xl bg-blue-100/60 text-blue-400 flex items-center justify-center">
+                            <Gift size={32} />
+                          </div>
                         )}
                       </div>
-                      <h4 className="text-xs font-black text-slate-900 truncate w-full">{p.name || `Rank ${p.rank} Prize`}</h4>
+                      <div className="bg-blue-900 py-2.5 px-3 text-center text-white font-black text-xs uppercase tracking-wider truncate border-t border-blue-800">
+                        {p.name || `Rank ${p.rank} Prize`}
+                      </div>
                     </div>
                   );
                 })}
@@ -469,18 +488,24 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
                 {prizesTs.map((p) => {
                   const img = p.image || p.img || p.picture;
                   return (
-                    <div key={p.rank} className="bg-emerald-50/40 border border-emerald-100 rounded-2xl p-4 flex flex-col items-center justify-between text-center gap-3 transition-all hover:border-emerald-300 hover:shadow-sm">
-                      <span className="bg-emerald-700 text-white font-extrabold text-xs px-3 py-1 rounded-lg">
-                        Rank {p.rank}
-                      </span>
-                      <div className="w-20 h-20 rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center shadow-xs">
+                    <div key={p.rank} className="bg-white border border-emerald-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative">
+                      <div className="absolute top-2.5 left-2.5 z-10">
+                        <span className="bg-emerald-700 text-white font-black text-[11px] px-2.5 py-1 rounded-lg shadow-sm">
+                          Rank {p.rank}
+                        </span>
+                      </div>
+                      <div className="w-full h-40 bg-gradient-to-b from-slate-50 to-emerald-50/30 p-3 flex items-center justify-center overflow-hidden relative">
                         {img ? (
-                          <img src={img} alt={p.name} className="w-full h-full object-contain" />
+                          <img src={img} alt={p.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-xs" />
                         ) : (
-                          <Gift size={32} className="text-emerald-300" />
+                          <div className="w-14 h-14 rounded-xl bg-emerald-100/60 text-emerald-500 flex items-center justify-center">
+                            <Gift size={32} />
+                          </div>
                         )}
                       </div>
-                      <h4 className="text-xs font-black text-slate-900 truncate w-full">{p.name || `Rank ${p.rank} Prize`}</h4>
+                      <div className="bg-emerald-800 py-2.5 px-3 text-center text-white font-black text-xs uppercase tracking-wider truncate border-t border-emerald-700">
+                        {p.name || `Rank ${p.rank} Prize`}
+                      </div>
                     </div>
                   );
                 })}
@@ -533,7 +558,7 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
             </div>
 
             {/* Bottom Row: Filter Pills */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto max-w-full w-fit">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto w-full max-w-full">
               {['ALL', 'PARTICIPATING', 'NOT_PARTICIPATING', 'JOINED', 'WINNER'].map(f => (
                 <button
                   key={f}
@@ -570,8 +595,8 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
             const totalCols = 4 + 1 + (!isCleanView ? 2 : 0) + (showWinnerRank ? 1 : 0);
 
             return (
-              <div className="border border-slate-200 rounded-2xl overflow-auto max-h-[480px] text-xs shadow-xs w-full">
-                <table className="w-full min-w-[700px] text-left border-collapse">
+              <div className="border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-[480px] text-xs shadow-xs w-full max-w-full">
+                <table className="w-full min-w-[750px] text-left border-collapse">
                   <thead className="bg-slate-50 text-slate-700 font-extrabold border-b border-slate-200 sticky top-0 z-10 shadow-xs">
                     <tr>
                       <th className="p-3.5">Service Type</th>
@@ -672,7 +697,7 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteParticipant(p.id, p.serviceType)}
+                                  onClick={() => promptDeleteParticipant(p)}
                                   className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer transition-colors"
                                   title="Delete Participant"
                                 >
@@ -703,6 +728,18 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
           onSave={handleSaveParticipantEdit}
         />
       )}
+
+      {/* Delete Participant Confirm Modal */}
+      <ConfirmModal
+        isOpen={deleteParticipantConfirm.isOpen}
+        title="Delete Participant"
+        message={`Are you sure you want to delete participant "${deleteParticipantConfirm.customerName || ''}"? This action cannot be undone.`}
+        confirmText="Delete Participant"
+        cancelText="Cancel"
+        type="danger"
+        onConfirm={handleConfirmDeleteParticipant}
+        onClose={() => setDeleteParticipantConfirm({ isOpen: false, pId: null, serviceType: null, customerName: '' })}
+      />
     </div>
   );
 };
