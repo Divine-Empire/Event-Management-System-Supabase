@@ -50,19 +50,8 @@ The workflow state and existing participant logic are centralized in `Participan
 - `/admin/live/:id` — Live draw console
 - `/admin/settings` — Settings
 
-## Environment
 
-Copy `.env.example` to `.env` and add the existing Supabase values:
 
-```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
 
-The actual `.env` file is intentionally not included in the cleaned archive.
 
-## Notes
 
-- Legacy/unused feature files, duplicate pages, generated `dist`, unused Vite assets, and obsolete storage/theme helpers were removed.
-- Existing business services, database integration, live synchronization, winner logic, and styling were retained.
-- The archive does not include `node_modules`; run `npm install` before development.
