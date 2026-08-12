@@ -229,6 +229,7 @@ export const ExcelImportPanel = ({ eventId, onImportComplete, onClose }) => {
                       <th className="p-2 border-b border-slate-200">Customer Name</th>
                       <th className="p-2 border-b border-slate-200">Phone Number</th>
                       <th className="p-2 border-b border-slate-200">Invoice Number</th>
+                      <th className="p-2 border-b border-slate-200">Lucky Number</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -238,6 +239,7 @@ export const ExcelImportPanel = ({ eventId, onImportComplete, onClose }) => {
                         <td className="p-2 text-slate-900 font-bold">{row.customerName}</td>
                         <td className="p-2 text-slate-600">{row.mobile}</td>
                         <td className="p-2 font-mono text-blue-900 font-extrabold">#{row.invoiceNumber}</td>
+                        <td className="p-2 font-mono text-emerald-700 font-bold">{row.luckyNumber ? `#${row.luckyNumber}` : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

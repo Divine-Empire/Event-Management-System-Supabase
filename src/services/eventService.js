@@ -1,4 +1,17 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, fixImageUrl } from '@/lib/supabase';
+
+const normalizePrizeList = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map(p => {
+    if (!p) return p;
+    const imgUrl = fixImageUrl(p.image || p.img || p.picture || p.logo || '');
+    return {
+      ...p,
+      image: imgUrl,
+      img: imgUrl
+    };
+  });
+};
 
 const DEFAULT_PRIZES = [
   { rank: 1, title: 'Rank 1 Prize', name: 'Grand Prize - Car', image: '' },
@@ -36,17 +49,22 @@ const mapEventFromDb = (row) => {
   const endDateTimeStr = row.end_date ? new Date(row.end_date).toISOString() : '';
   const endDate = endDateTimeStr ? endDateTimeStr.slice(0, 10) : (row.end_date || '');
 
-  const prizesNabl = Array.isArray(row.prizes_nabl) && row.prizes_nabl.length > 0
+  const rawPrizesNabl = Array.isArray(row.prizes_nabl) && row.prizes_nabl.length > 0
     ? row.prizes_nabl
     : (Array.isArray(row.prizes) && row.prizes.length > 0 ? row.prizes : DEFAULT_PRIZES);
-  const prizesTs = Array.isArray(row.prizes_ts) && row.prizes_ts.length > 0
+  const rawPrizesTs = Array.isArray(row.prizes_ts) && row.prizes_ts.length > 0
     ? row.prizes_ts
     : DEFAULT_PRIZES_TS;
+
+  const prizesNabl = normalizePrizeList(rawPrizesNabl);
+  const prizesTs = normalizePrizeList(rawPrizesTs);
+  const logo = fixImageUrl(row.logo || '');
 
   return {
     id: row.id,
     token: row.token,
     name: row.name,
+    logo: logo,
     description: row.description || '',
     sponsor: row.sponsor || 'Divine Empire Global',
     startDate: startDate,

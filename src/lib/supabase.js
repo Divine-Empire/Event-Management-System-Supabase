@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://lbnzhmsywbtcevrjrxht.supabase.co';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://zpkikvgmmbtekbcuqahf.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -10,6 +10,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const BUCKET_NAME = 'Event_system';
+
+export const fixImageUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  if (url.includes('.supabase.co/storage/v1/object/public/')) {
+    const storagePath = url.split('/storage/v1/object/public/')[1];
+    if (storagePath) {
+      return `${supabaseUrl}/storage/v1/object/public/${storagePath}`;
+    }
+  }
+  return url;
+};
 
 export const uploadPrizeImage = async (file, pathPrefix = 'prizes') => {
   if (!file) return null;

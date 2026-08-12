@@ -174,7 +174,7 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
       'Invoice Number': p.invoiceNumber,
       'Customer Name': p.customerName,
       'Mobile Number': p.mobile,
-      'Status': p.winner ? 'Winner' : p.joined ? 'Joined' : p.participating ? 'Approved' : 'Waiting',
+      'Status': p.winner ? 'Winner' : (p.joinedAt || p.joined_at) ? 'Joined' : p.participating ? 'Approved' : 'Waiting',
       'Lucky Number': p.luckyNumber || 'N/A'
     }));
 
@@ -216,7 +216,7 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
     if (selectedService === 'NABL' && p.serviceType !== 'NABL') return false;
     if (selectedService === 'TOTAL_STATION' && p.serviceType !== 'TOTAL_STATION') return false;
 
-    const hasJoined = Boolean(p.joined || (p.luckyNumber && String(p.luckyNumber).trim() !== ''));
+    const hasJoined = Boolean(p.joinedAt || p.joined_at);
 
     if (filter === 'PARTICIPATING') return p.participating;
     if (filter === 'NOT_PARTICIPATING') return !p.participating;
@@ -654,11 +654,11 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
                             <td className="p-3.5">
                               <button
                                 type="button"
-                                disabled={p.joined || computedStatus === 'ENDED'}
+                                disabled={Boolean(p.joinedAt || p.joined_at) || computedStatus === 'ENDED'}
                                 onClick={() => handleToggleParticipation(p.id, p.serviceType)}
-                                title={computedStatus === 'ENDED' ? 'Participation status cannot be changed for ended events' : p.joined ? 'Participation locked (participant has joined)' : p.participating ? 'Click to mark as Not Participating' : 'Click to mark as Participating'}
+                                title={computedStatus === 'ENDED' ? 'Participation status cannot be changed for ended events' : (p.joinedAt || p.joined_at) ? 'Participation locked (participant has joined)' : p.participating ? 'Click to mark as Not Participating' : 'Click to mark as Participating'}
                                 className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                  (p.joined || computedStatus === 'ENDED')
+                                  (Boolean(p.joinedAt || p.joined_at) || computedStatus === 'ENDED')
                                     ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300 opacity-60'
                                     : p.participating
                                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'

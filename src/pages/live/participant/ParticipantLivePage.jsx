@@ -299,13 +299,17 @@ export const ParticipantLivePage = () => {
             {prizes.map(p => {
               const isSelected = Number(selectedRank) === Number(p.rank);
               const pWinner = winners.find(w => Number(w.rank) === Number(p.rank) || Number(w.winnerRank) === Number(p.rank));
+              const isLiveDrawActive = session?.phase === 'BUILDUP' || session?.phase === 'COUNTDOWN' || session?.phase === 'DRAWING';
 
               return (
                 <button
                   key={p.rank}
                   type="button"
-                  onClick={() => setSelectedRank(p.rank)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  disabled={isLiveDrawActive}
+                  onClick={() => !isLiveDrawActive && setSelectedRank(p.rank)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    isLiveDrawActive ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                  } ${
                     isSelected ? 'bg-blue-900 text-white shadow-xs font-extrabold' : 'text-slate-700 hover:bg-slate-200 font-semibold'
                   }`}
                 >

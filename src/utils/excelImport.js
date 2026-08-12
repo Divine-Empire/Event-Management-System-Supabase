@@ -36,8 +36,9 @@ export const parseExcelFile = (file) => {
           const customerName = getFieldValue(row, ['Customer Name', 'CustomerName', 'Name', 'Customer', 'Client Name']);
           const mobile = getFieldValue(row, ['Phone Number', 'PhoneNumber', 'Mobile Number', 'MobileNumber', 'Phone', 'Mobile', 'Contact', 'Phone No', 'Mobile No']);
           const invoiceNumber = getFieldValue(row, ['Invoice Number', 'InvoiceNumber', 'Invoice', 'InvoiceNo', 'Invoice No', 'Bill Number', 'Bill No']);
+          const luckyNumber = getFieldValue(row, ['Lucky Number', 'LuckyNumber', 'Lucky No', 'LuckyNo', 'Lucky', 'Token Number', 'Token']);
 
-          if (!serialNumber && !customerName && !mobile && !invoiceNumber) {
+          if (!serialNumber && !customerName && !mobile && !invoiceNumber && !luckyNumber) {
             return; // skip completely empty rows
           }
 
@@ -53,7 +54,11 @@ export const parseExcelFile = (file) => {
               serialNumber: serialNumber || String(index + 1),
               customerName,
               mobile,
-              invoiceNumber
+              invoiceNumber,
+              luckyNumber: luckyNumber ? String(luckyNumber).padStart(3, '0') : null,
+              joined: false,
+              joinedAt: null,
+              participating: true
             });
           }
         });
@@ -71,11 +76,11 @@ export const parseExcelFile = (file) => {
 
 export const generateSampleExcel = () => {
   const sampleData = [
-    { 'Serial Number': '1', 'Customer Name': 'Rahul Sharma', 'Phone Number': '9876543210', 'Invoice Number': '001' },
-    { 'Serial Number': '2', 'Customer Name': 'Priya Patel', 'Phone Number': '9812345678', 'Invoice Number': '002' },
-    { 'Serial Number': '3', 'Customer Name': 'Amit Kumar', 'Phone Number': '9988776655', 'Invoice Number': '003' },
-    { 'Serial Number': '4', 'Customer Name': 'Sneha Gupta', 'Phone Number': '9765432109', 'Invoice Number': '004' },
-    { 'Serial Number': '5', 'Customer Name': 'Vikram Singh', 'Phone Number': '9654321098', 'Invoice Number': '005' }
+    { 'Serial Number': '1', 'Customer Name': 'Rahul Sharma', 'Phone Number': '9876543210', 'Invoice Number': '001', 'Lucky Number': '101' },
+    { 'Serial Number': '2', 'Customer Name': 'Priya Patel', 'Phone Number': '9812345678', 'Invoice Number': '002', 'Lucky Number': '102' },
+    { 'Serial Number': '3', 'Customer Name': 'Amit Kumar', 'Phone Number': '9988776655', 'Invoice Number': '003', 'Lucky Number': '103' },
+    { 'Serial Number': '4', 'Customer Name': 'Sneha Gupta', 'Phone Number': '9765432109', 'Invoice Number': '004', 'Lucky Number': '104' },
+    { 'Serial Number': '5', 'Customer Name': 'Vikram Singh', 'Phone Number': '9654321098', 'Invoice Number': '005', 'Lucky Number': '105' }
   ];
 
   const worksheet = XLSX.utils.json_to_sheet(sampleData);

@@ -44,6 +44,7 @@ export const AdminLivePage = () => {
 
   const [isEnding, setIsEnding] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [isDrawingActive, setIsDrawingActive] = useState(false);
 
   const flipCardsRef = useRef(null);
 
@@ -55,7 +56,7 @@ export const AdminLivePage = () => {
   const { prizes: tsPrizes, participants: tsParts, winners: tsWinners, session: tsSession, refetch: refetchTs } = tsSessionData;
 
   const activeSessionData = activeService === 'TOTAL_STATION' ? tsSessionData : nablSessionData;
-  const { prizes, participants, winners, session, refetch } = activeSessionData;
+  const { prizes, participants, winners, session, isLoading, refetch } = activeSessionData;
 
   const { preLiveSeconds, reverseCountdown } = useLiveClock(event, session?.phase_ends_at, activeService);
   const { drawNextWinnerForRank } = useDrawStore();
@@ -142,7 +143,6 @@ export const AdminLivePage = () => {
     return () => clearInterval(interval);
   }, [event, isCompleted, tsComplete]);
 
-  // Centralized Draw Trigger Action (parameterized by serviceType)
   const triggerDrawForRank = async (targetRank, targetServiceType = 'NABL') => {
     const isTs = targetServiceType === 'TOTAL_STATION';
     const autoLockRef = isTs ? tsAutoLockRef : nablAutoLockRef;
@@ -156,6 +156,7 @@ export const AdminLivePage = () => {
 
     if (autoLockRef.current) return;
     autoLockRef.current = true;
+    setIsDrawingActive(true);
 
     const currentPrizes = prizesRef.current || [];
     const currentWinners = winnersRef.current || [];
@@ -164,6 +165,7 @@ export const AdminLivePage = () => {
     const prize = currentPrizes.find(p => Number(p.rank) === Number(targetRank));
     if (!prize) {
       autoLockRef.current = false;
+      setIsDrawingActive(false);
       return;
     }
 
@@ -258,6 +260,7 @@ export const AdminLivePage = () => {
     // Hold revealed winner for 4 seconds before unlocking next rank
     await new Promise(r => setTimeout(r, 4000));
     autoLockRef.current = false;
+    setIsDrawingActive(false);
   };
 
   // NABL Automatic Draw Loop
@@ -295,7 +298,7 @@ export const AdminLivePage = () => {
 
     const interval = setInterval(autoLoop, 1500);
     return () => clearInterval(interval);
-  }, [event, isAutoRunningNabl, isCompleted, isSpinningNabl]);
+  }, [event, isAutoRunningNabl, isCompleted]);
 
   // TOTAL STATION Automatic Draw Loop
   useEffect(() => {
@@ -332,7 +335,7 @@ export const AdminLivePage = () => {
 
     const interval = setInterval(autoLoop, 1500);
     return () => clearInterval(interval);
-  }, [event, isAutoRunningTs, isCompleted, isSpinningTs]);
+  }, [event, isAutoRunningTs, isCompleted]);
 
   const handleConfirmAndEndEvent = () => {
     setEndConfirmOpen(true);
@@ -545,8 +548,11 @@ export const AdminLivePage = () => {
                 <button
                   key={p.rank}
                   type="button"
-                  onClick={() => setSelectedRank(p.rank)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  disabled={isDrawingActive}
+                  onClick={() => !isDrawingActive && setSelectedRank(p.rank)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    isDrawingActive ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                  } ${
                     isSelected ? 'bg-blue-900 text-white shadow-xs font-extrabold' : 'text-slate-700 hover:bg-slate-200 font-semibold'
                   }`}
                 >
