@@ -34,6 +34,9 @@ export const liveSessionService = {
     if (!eventId) return null;
     const sType = String(serviceType).toUpperCase().includes('TOTAL') ? 'TOTAL_STATION' : 'NABL';
 
+    const existingSession = await liveSessionService.getLiveSession(eventId, sType);
+    const existingLastRank = existingSession?.last_completed_rank || 0;
+
     const payload = {
       event_id: eventId,
       service_type: sType,
@@ -44,7 +47,7 @@ export const liveSessionService = {
       phase_ends_at: sessionPayload.phaseEndsAt || sessionPayload.phase_ends_at || null,
       current_winner_lucky_number: sessionPayload.currentWinnerLuckyNumber || sessionPayload.current_winner_lucky_number || null,
       current_winner_names: sessionPayload.currentWinnerNames || sessionPayload.current_winner_names || null,
-      last_completed_rank: sessionPayload.lastCompletedRank || sessionPayload.last_completed_rank || 0,
+      last_completed_rank: sessionPayload.lastCompletedRank ?? sessionPayload.last_completed_rank ?? existingLastRank,
       updated_at: new Date().toISOString()
     };
 

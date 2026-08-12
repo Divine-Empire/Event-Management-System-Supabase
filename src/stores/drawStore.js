@@ -22,7 +22,11 @@ export const useDrawStore = create((set, get) => ({
 
   // Helper to check if rank is locked (already has published winner)
   isRankLocked: (rank, publishedWinners = []) => {
-    return publishedWinners.some(w => (w.rank === rank || w.rank === Number(rank)) && (w.published || w.winner));
+    const targetRank = Number(rank);
+    return publishedWinners.some(w => {
+      const r = Number(w.winnerRank || w.rank);
+      return r === targetRank && (w.published || w.winner);
+    });
   },
 
   // Single rank draw action (per spinner spin)

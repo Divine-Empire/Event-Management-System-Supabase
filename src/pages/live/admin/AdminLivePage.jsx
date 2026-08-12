@@ -40,6 +40,7 @@ export const AdminLivePage = () => {
 
   const flipCardsRef = useRef(null);
   const autoLockRef = useRef(false);
+  const drawnRanksRef = useRef(new Set());
 
   const { event, prizes, participants, winners, session, isLoading, refetch } = useLiveSession(id, null, activeService);
   const { preLiveSeconds, reverseCountdown } = useLiveClock(event, session?.phase_ends_at, activeService);
@@ -59,7 +60,15 @@ export const AdminLivePage = () => {
   const participantsRef = useRef(participants);
   const sessionRef = useRef(session);
 
-  useEffect(() => { winnersRef.current = winners; }, [winners]);
+  useEffect(() => { 
+    winnersRef.current = winners; 
+    const drawn = new Set();
+    (winners || []).forEach(w => {
+      const r = Number(w.winnerRank || w.rank);
+      if (r) drawn.add(r);
+    });
+    drawnRanksRef.current = drawn;
+  }, [winners, activeService]);
   useEffect(() => { prizesRef.current = prizes; }, [prizes]);
   useEffect(() => { participantsRef.current = participants; }, [participants]);
   useEffect(() => { sessionRef.current = session; }, [session]);
@@ -129,6 +138,9 @@ export const AdminLivePage = () => {
     const res = drawNextWinnerForRank(targetRank, prize.name || `Rank ${targetRank}`, availableParts, event.id, currentWinners);
 
     if (res.success && res.winner) {
+      // Mark rank as drawn immediately in synchronous ref
+      drawnRanksRef.current.add(Number(targetRank));
+
       if (flipCardsRef.current?.spinToWinner) {
         flipCardsRef.current.spinToWinner(res.winner);
       }
@@ -191,7 +203,9 @@ export const AdminLivePage = () => {
 
       const sortedPrizes = [...currentPrizes].sort((a, b) => Number(a.rank) - Number(b.rank));
       const unrevealedPrize = sortedPrizes.find(p => {
-        const hasW = currentWinners.some(w => Number(w.rank) === Number(p.rank) || Number(w.winnerRank) === Number(p.rank));
+        const pRank = Number(p.rank);
+        if (drawnRanksRef.current.has(pRank)) return false;
+        const hasW = currentWinners.some(w => Number(w.rank) === pRank || Number(w.winnerRank) === pRank);
         return !hasW;
       });
 
