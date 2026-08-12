@@ -33,16 +33,30 @@ export const AdminLivePage = () => {
 
   const [activeService, setActiveService] = useState('NABL'); // 'NABL' | 'TOTAL_STATION'
   const [selectedRank, setSelectedRank] = useState(1);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [isAutoRunning, setIsAutoRunning] = useState(true);
+
+  // Spinning states per service
+  const [isSpinningNabl, setIsSpinningNabl] = useState(false);
+  const [isSpinningTs, setIsSpinningTs] = useState(false);
+
+  // Auto-running flags per service
+  const [isAutoRunningNabl, setIsAutoRunningNabl] = useState(true);
+  const [isAutoRunningTs, setIsAutoRunningTs] = useState(true);
+
   const [isEnding, setIsEnding] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
 
   const flipCardsRef = useRef(null);
-  const autoLockRef = useRef(false);
-  const drawnRanksRef = useRef(new Set());
 
-  const { event, prizes, participants, winners, session, isLoading, refetch } = useLiveSession(id, null, activeService);
+  // 1. Dual session subscriptions for NABL and TOTAL_STATION
+  const nablSessionData = useLiveSession(id, null, 'NABL');
+  const tsSessionData = useLiveSession(id, null, 'TOTAL_STATION');
+
+  const { event, prizes: nablPrizes, participants: nablParts, winners: nablWinners, session: nablSession, isLoading: isLoadingNabl, refetch: refetchNabl } = nablSessionData;
+  const { prizes: tsPrizes, participants: tsParts, winners: tsWinners, session: tsSession, refetch: refetchTs } = tsSessionData;
+
+  const activeSessionData = activeService === 'TOTAL_STATION' ? tsSessionData : nablSessionData;
+  const { prizes, participants, winners, session, refetch } = activeSessionData;
+
   const { preLiveSeconds, reverseCountdown } = useLiveClock(event, session?.phase_ends_at, activeService);
   const { drawNextWinnerForRank } = useDrawStore();
 
@@ -51,50 +65,101 @@ export const AdminLivePage = () => {
   const prizeImg = activePrize?.image || activePrize?.img || activePrize?.picture || activePrize?.logo || '';
 
   const computedStatus = computeEventStatus(event, winners, prizes);
-  const allPrizesDrawn = prizes.length > 0 && winners.length >= prizes.length;
-  const isCompleted = computedStatus === EVENT_STATUS.ENDED;
+  const nablComplete = nablPrizes.length > 0 && nablWinners.length >= nablPrizes.length;
+  const tsComplete = tsPrizes.length > 0 && tsWinners.length >= tsPrizes.length;
+  const allPrizesDrawn = (nablPrizes.length === 0 || nablComplete) && (tsPrizes.length === 0 || tsComplete);
+  const isCompleted = computedStatus === EVENT_STATUS.ENDED || allPrizesDrawn;
 
-  // Latest state references for async auto-loop safety
-  const winnersRef = useRef(winners);
-  const prizesRef = useRef(prizes);
-  const participantsRef = useRef(participants);
-  const sessionRef = useRef(session);
+  // Dedicated Refs for NABL
+  const nablAutoLockRef = useRef(false);
+  const nablDrawnRanksRef = useRef(new Set());
+  const nablWinnersRef = useRef(nablWinners);
+  const nablPrizesRef = useRef(nablPrizes);
+  const nablPartsRef = useRef(nablParts);
+  const nablSessionRef = useRef(nablSession);
 
-  useEffect(() => { 
-    winnersRef.current = winners; 
+  // Dedicated Refs for TOTAL_STATION
+  const tsAutoLockRef = useRef(false);
+  const tsDrawnRanksRef = useRef(new Set());
+  const tsWinnersRef = useRef(tsWinners);
+  const tsPrizesRef = useRef(tsPrizes);
+  const tsPartsRef = useRef(tsParts);
+  const tsSessionRef = useRef(tsSession);
+
+  // Sync NABL Refs
+  useEffect(() => {
+    nablWinnersRef.current = nablWinners;
     const drawn = new Set();
-    (winners || []).forEach(w => {
+    (nablWinners || []).forEach(w => {
       const r = Number(w.winnerRank || w.rank);
       if (r) drawn.add(r);
     });
-    drawnRanksRef.current = drawn;
-  }, [winners, activeService]);
-  useEffect(() => { prizesRef.current = prizes; }, [prizes]);
-  useEffect(() => { participantsRef.current = participants; }, [participants]);
-  useEffect(() => { sessionRef.current = session; }, [session]);
+    nablDrawnRanksRef.current = drawn;
+  }, [nablWinners]);
+  useEffect(() => { nablPrizesRef.current = nablPrizes; }, [nablPrizes]);
+  useEffect(() => { nablPartsRef.current = nablParts; }, [nablParts]);
+  useEffect(() => { nablSessionRef.current = nablSession; }, [nablSession]);
 
-  // Automatically enable auto-running if live time is reached
+  // Sync TS Refs
+  useEffect(() => {
+    tsWinnersRef.current = tsWinners;
+    const drawn = new Set();
+    (tsWinners || []).forEach(w => {
+      const r = Number(w.winnerRank || w.rank);
+      if (r) drawn.add(r);
+    });
+    tsDrawnRanksRef.current = drawn;
+  }, [tsWinners]);
+  useEffect(() => { tsPrizesRef.current = tsPrizes; }, [tsPrizes]);
+  useEffect(() => { tsPartsRef.current = tsParts; }, [tsParts]);
+  useEffect(() => { tsSessionRef.current = tsSession; }, [tsSession]);
+
+  // Automatically enable auto-running when live time is reached for NABL
   useEffect(() => {
     if (!event || isCompleted) return;
     const checkLiveTime = () => {
-      const liveMs = getLiveMs(event, activeService);
-      if (liveMs > 0 && Date.now() >= liveMs && !allPrizesDrawn) {
-        setIsAutoRunning(true);
+      const liveMs = getLiveMs(event, 'NABL');
+      if (liveMs > 0 && Date.now() >= liveMs && !nablComplete) {
+        setIsAutoRunningNabl(true);
       }
     };
     checkLiveTime();
     const interval = setInterval(checkLiveTime, 1000);
     return () => clearInterval(interval);
-  }, [event, activeService, isCompleted, allPrizesDrawn]);
+  }, [event, isCompleted, nablComplete]);
 
-  // Centralized Draw Trigger Action
-  const triggerDrawForRank = async (targetRank) => {
-    if (autoLockRef.current || isSpinning) return;
+  // Automatically enable auto-running when live time is reached for TOTAL_STATION
+  useEffect(() => {
+    if (!event || isCompleted) return;
+    const checkLiveTime = () => {
+      const liveMs = getLiveMs(event, 'TOTAL_STATION');
+      if (liveMs > 0 && Date.now() >= liveMs && !tsComplete) {
+        setIsAutoRunningTs(true);
+      }
+    };
+    checkLiveTime();
+    const interval = setInterval(checkLiveTime, 1000);
+    return () => clearInterval(interval);
+  }, [event, isCompleted, tsComplete]);
+
+  // Centralized Draw Trigger Action (parameterized by serviceType)
+  const triggerDrawForRank = async (targetRank, targetServiceType = 'NABL') => {
+    const isTs = targetServiceType === 'TOTAL_STATION';
+    const autoLockRef = isTs ? tsAutoLockRef : nablAutoLockRef;
+    const drawnRanksRef = isTs ? tsDrawnRanksRef : nablDrawnRanksRef;
+    const prizesRef = isTs ? tsPrizesRef : nablPrizesRef;
+    const winnersRef = isTs ? tsWinnersRef : nablWinnersRef;
+    const partsRef = isTs ? tsPartsRef : nablPartsRef;
+    const setIsSpinning = isTs ? setIsSpinningTs : setIsSpinningNabl;
+    const setIsAutoRunning = isTs ? setIsAutoRunningTs : setIsAutoRunningNabl;
+    const refetchService = isTs ? refetchTs : refetchNabl;
+
+    if (autoLockRef.current) return;
     autoLockRef.current = true;
 
     const currentPrizes = prizesRef.current || [];
     const currentWinners = winnersRef.current || [];
-    const currentParts = participantsRef.current || [];
+    const currentParts = partsRef.current || [];
 
     const prize = currentPrizes.find(p => Number(p.rank) === Number(targetRank));
     if (!prize) {
@@ -102,7 +167,9 @@ export const AdminLivePage = () => {
       return;
     }
 
-    setSelectedRank(targetRank);
+    if (activeService === targetServiceType) {
+      setSelectedRank(targetRank);
+    }
 
     // 1. Build Up Phase (2 seconds)
     const buildUpSession = {
@@ -111,7 +178,7 @@ export const AdminLivePage = () => {
       total_ranks: currentPrizes.length,
       phase_started_at: new Date().toISOString()
     };
-    await liveSessionService.upsertLiveSession(event.id, activeService, buildUpSession);
+    await liveSessionService.upsertLiveSession(event.id, targetServiceType, buildUpSession);
     await new Promise(r => setTimeout(r, 2000));
 
     // 2. Reverse Countdown Phase (5 seconds)
@@ -122,7 +189,7 @@ export const AdminLivePage = () => {
       phase_started_at: new Date().toISOString(),
       phase_ends_at: phaseEndsAt
     };
-    await liveSessionService.upsertLiveSession(event.id, activeService, countdownSession);
+    await liveSessionService.upsertLiveSession(event.id, targetServiceType, countdownSession);
     await new Promise(r => setTimeout(r, 5000));
 
     // 3. Drawing Phase
@@ -132,7 +199,7 @@ export const AdminLivePage = () => {
       current_rank: targetRank,
       phase_started_at: new Date().toISOString()
     };
-    await liveSessionService.upsertLiveSession(event.id, activeService, drawingSession);
+    await liveSessionService.upsertLiveSession(event.id, targetServiceType, drawingSession);
 
     const availableParts = currentParts.filter(p => p.participating && (p.joined || (p.luckyNumber && String(p.luckyNumber).trim() !== '')));
     const res = drawNextWinnerForRank(targetRank, prize.name || `Rank ${targetRank}`, availableParts, event.id, currentWinners);
@@ -141,14 +208,14 @@ export const AdminLivePage = () => {
       // Mark rank as drawn immediately in synchronous ref
       drawnRanksRef.current.add(Number(targetRank));
 
-      if (flipCardsRef.current?.spinToWinner) {
+      if (activeService === targetServiceType && flipCardsRef.current?.spinToWinner) {
         flipCardsRef.current.spinToWinner(res.winner);
       }
 
       // Save & Publish winner to DB
-      await winnerStorage.saveWinners(event.id, [res.winner], activeService);
-      await winnerStorage.publishWinners(event.id, null, activeService);
-      await refetch();
+      await winnerStorage.saveWinners(event.id, [res.winner], targetServiceType);
+      await winnerStorage.publishWinners(event.id, null, targetServiceType);
+      await refetchService();
 
       const winnerName = res.winner.customerName || res.winner.name || 'Winner';
       const luckyNo = res.winner.luckyNumber || res.winner.winningNumber || res.winner.invoiceNumber;
@@ -162,19 +229,28 @@ export const AdminLivePage = () => {
         last_completed_rank: targetRank,
         phase_started_at: new Date().toISOString()
       };
-      await liveSessionService.upsertLiveSession(event.id, activeService, revealedSession);
+      await liveSessionService.upsertLiveSession(event.id, targetServiceType, revealedSession);
 
-      toast.success(`Rank ${targetRank} Winner: ${winnerName}!`);
+      toast.success(`${targetServiceType === 'TOTAL_STATION' ? 'Total Station' : 'NABL'} Rank ${targetRank} Winner: ${winnerName}!`);
 
-      // Check if all ranks are drawn
-      const freshWinners = await winnerStorage.getWinners(event.id, activeService);
-      if (currentPrizes.length > 0 && freshWinners.length >= currentPrizes.length) {
+      // Check if both services have completed all ranks
+      const freshNablWinners = await winnerStorage.getWinners(event.id, 'NABL');
+      const freshTsWinners = await winnerStorage.getWinners(event.id, 'TOTAL_STATION');
+
+      const isNablDone = nablPrizesRef.current.length === 0 || freshNablWinners.length >= nablPrizesRef.current.length;
+      const isTsDone = tsPrizesRef.current.length === 0 || freshTsWinners.length >= tsPrizesRef.current.length;
+
+      if (isNablDone && isTsDone) {
         await eventStorage.saveEvent(event.id, { status: 'ENDED' });
-        await winnerStorage.publishWinners(event.id, null, activeService);
+        await winnerStorage.publishWinners(event.id, null, targetServiceType);
         const completedSession = { phase: 'COMPLETED', last_completed_rank: targetRank };
-        await liveSessionService.upsertLiveSession(event.id, activeService, completedSession);
-        toast.success('All winners revealed! Event COMPLETED');
+        await liveSessionService.upsertLiveSession(event.id, targetServiceType, completedSession);
+        toast.success('All streams completed! Event OFFICIALLY ENDED 🎉');
+        setIsAutoRunningNabl(false);
+        setIsAutoRunningTs(false);
+      } else if (isTs ? isTsDone : isNablDone) {
         setIsAutoRunning(false);
+        toast.info(`${targetServiceType === 'TOTAL_STATION' ? 'Total Station' : 'NABL'} Stream Completed!`);
       }
     }
 
@@ -184,42 +260,79 @@ export const AdminLivePage = () => {
     autoLockRef.current = false;
   };
 
-  // Central Automatic Loop
+  // NABL Automatic Draw Loop
   useEffect(() => {
     if (!event || isCompleted) return;
 
     const autoLoop = async () => {
-      const liveMs = getLiveMs(event, activeService);
+      const liveMs = getLiveMs(event, 'NABL');
       if (liveMs > 0 && Date.now() < liveMs) return; // Not live time yet
 
-      if (!isAutoRunning) return;
-      if (autoLockRef.current || isSpinning) return;
+      if (!isAutoRunningNabl) return;
+      if (nablAutoLockRef.current || isSpinningNabl) return;
       
-      const currentPhase = sessionRef.current?.phase;
+      const currentPhase = nablSessionRef.current?.phase;
       if (currentPhase === 'BUILDUP' || currentPhase === 'COUNTDOWN' || currentPhase === 'DRAWING') return;
 
-      const currentPrizes = prizesRef.current || [];
-      const currentWinners = winnersRef.current || [];
+      const currentPrizes = nablPrizesRef.current || [];
+      const currentWinners = nablWinnersRef.current || [];
 
       const sortedPrizes = [...currentPrizes].sort((a, b) => Number(a.rank) - Number(b.rank));
       const unrevealedPrize = sortedPrizes.find(p => {
         const pRank = Number(p.rank);
-        if (drawnRanksRef.current.has(pRank)) return false;
+        if (nablDrawnRanksRef.current.has(pRank)) return false;
         const hasW = currentWinners.some(w => Number(w.rank) === pRank || Number(w.winnerRank) === pRank);
         return !hasW;
       });
 
       if (!unrevealedPrize) {
-        setIsAutoRunning(false);
+        setIsAutoRunningNabl(false);
         return;
       }
 
-      await triggerDrawForRank(unrevealedPrize.rank);
+      await triggerDrawForRank(unrevealedPrize.rank, 'NABL');
     };
 
     const interval = setInterval(autoLoop, 1500);
     return () => clearInterval(interval);
-  }, [event, activeService, isAutoRunning, isCompleted, isSpinning]);
+  }, [event, isAutoRunningNabl, isCompleted, isSpinningNabl]);
+
+  // TOTAL STATION Automatic Draw Loop
+  useEffect(() => {
+    if (!event || isCompleted) return;
+
+    const autoLoop = async () => {
+      const liveMs = getLiveMs(event, 'TOTAL_STATION');
+      if (liveMs > 0 && Date.now() < liveMs) return; // Not live time yet
+
+      if (!isAutoRunningTs) return;
+      if (tsAutoLockRef.current || isSpinningTs) return;
+      
+      const currentPhase = tsSessionRef.current?.phase;
+      if (currentPhase === 'BUILDUP' || currentPhase === 'COUNTDOWN' || currentPhase === 'DRAWING') return;
+
+      const currentPrizes = tsPrizesRef.current || [];
+      const currentWinners = tsWinnersRef.current || [];
+
+      const sortedPrizes = [...currentPrizes].sort((a, b) => Number(a.rank) - Number(b.rank));
+      const unrevealedPrize = sortedPrizes.find(p => {
+        const pRank = Number(p.rank);
+        if (tsDrawnRanksRef.current.has(pRank)) return false;
+        const hasW = currentWinners.some(w => Number(w.rank) === pRank || Number(w.winnerRank) === pRank);
+        return !hasW;
+      });
+
+      if (!unrevealedPrize) {
+        setIsAutoRunningTs(false);
+        return;
+      }
+
+      await triggerDrawForRank(unrevealedPrize.rank, 'TOTAL_STATION');
+    };
+
+    const interval = setInterval(autoLoop, 1500);
+    return () => clearInterval(interval);
+  }, [event, isAutoRunningTs, isCompleted, isSpinningTs]);
 
   const handleConfirmAndEndEvent = () => {
     setEndConfirmOpen(true);
@@ -394,7 +507,7 @@ export const AdminLivePage = () => {
         <div className="w-full bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
           <FlipDigitCards
             ref={flipCardsRef}
-            isSpinningExternal={isSpinning}
+            isSpinningExternal={activeService === 'TOTAL_STATION' ? isSpinningTs : isSpinningNabl}
             participants={joinedParticipants}
             activeRank={selectedRank}
             prizeName={activePrize?.name || `Prize ${selectedRank}`}
