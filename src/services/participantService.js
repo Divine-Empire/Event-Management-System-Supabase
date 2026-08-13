@@ -25,7 +25,7 @@ const normalizeServiceType = (serviceType) => {
 };
 
 const getTableForServiceType = (serviceType) => {
-  if (!serviceType) return 'event_participants';
+  if (!serviceType) return 'event_participants_nabl';
   const sType = normalizeServiceType(serviceType);
   return sType === 'TOTAL_STATION' ? 'event_participants_ts' : 'event_participants_nabl';
 };
@@ -57,20 +57,26 @@ const mapParticipantFromDb = (p) => {
 };
 
 export const participantService = {
-  getParticipantById: async (participantId) => {
+  getParticipantById: async (participantId, serviceType = null) => {
     if (!participantId) return null;
     try {
-      const { data, error } = await supabase
+      const table = getTableForServiceType(serviceType);
+      const { data } = await supabase
+        .from(table)
+        .select('*')
+        .eq('id', participantId)
+        .maybeSingle();
+
+      if (data) return mapParticipantFromDb(data);
+
+      // Fallback check legacy table
+      const { data: legacyData } = await supabase
         .from('event_participants')
         .select('*')
         .eq('id', participantId)
         .maybeSingle();
 
-      if (error || !data) {
-        console.error('Supabase getParticipantById error:', error);
-        return null;
-      }
-      return mapParticipantFromDb(data);
+      return mapParticipantFromDb(legacyData);
     } catch (err) {
       console.error('getParticipantById exception:', err);
       return null;
@@ -81,22 +87,40 @@ export const participantService = {
     if (!eventId) return [];
 
     try {
-      let query = supabase
-        .from('event_participants')
-        .select('*')
-        .eq('event_id', eventId);
+      if (serviceType && serviceType !== 'ALL') {
+        const table = getTableForServiceType(serviceType);
+        const sType = normalizeServiceType(serviceType);
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .eq('event_id', eventId);
 
-      if (serviceType) {
-        query = query.eq('service_type', normalizeServiceType(serviceType));
+        if (error) {
+          console.error(`Supabase getParticipants error on ${table}:`, error);
+          return [];
+        }
+        return (data || []).map(p => mapParticipantFromDb({ ...p, service_type: sType }));
       }
 
-      const { data, error } = await query;
+      // Query both NABL and TS tables (and legacy table) when serviceType is null or ALL
+      const [nablRes, tsRes, legacyRes] = await Promise.all([
+        supabase.from('event_participants_nabl').select('*').eq('event_id', eventId),
+        supabase.from('event_participants_ts').select('*').eq('event_id', eventId),
+        supabase.from('event_participants').select('*').eq('event_id', eventId)
+      ]);
 
-      if (error) {
-        console.error('Supabase getParticipants error:', error);
-        return [];
-      }
-      return (data || []).map(p => mapParticipantFromDb(p));
+      const nablList = (nablRes.data || []).map(p => mapParticipantFromDb({ ...p, service_type: 'NABL' }));
+      const tsList = (tsRes.data || []).map(p => mapParticipantFromDb({ ...p, service_type: 'TOTAL_STATION' }));
+      const legacyList = (legacyRes.data || []).map(p => mapParticipantFromDb(p));
+
+      const combined = new Map();
+      [...nablList, ...tsList, ...legacyList].forEach(p => {
+        if (p && p.id && !combined.has(p.id)) {
+          combined.set(p.id, p);
+        }
+      });
+
+      return Array.from(combined.values());
     } catch (err) {
       console.error('getParticipants exception:', err);
       return [];
@@ -111,7 +135,8 @@ export const participantService = {
     const cleanMobile = normMobile(mobile);
     const cleanInvoice = normInvoice(invoiceNumber);
 
-    const list = await participantService.getParticipants(eventId);
+    // Fetch participants strictly for the requested serviceType
+    const list = await participantService.getParticipants(eventId, sType);
 
     const byInvoice = list.find(p => isInvoiceMatch(p.invoiceNumber || p.invoiceNo, cleanInvoice));
     const byMobile = list.find(p => normMobile(p.mobile || p.phone) === cleanMobile);
@@ -119,16 +144,12 @@ export const participantService = {
     if (byInvoice) {
       const dbMobile = normMobile(byInvoice.mobile || byInvoice.phone);
       const dbName = normName(byInvoice.customerName || byInvoice.name);
-      const dbServiceType = normalizeServiceType(byInvoice.serviceType);
 
       if (dbMobile !== cleanMobile) {
         throw new Error('INVOICE_MOBILE_MISMATCH');
       }
       if (dbName && cleanName && dbName !== cleanName && !dbName.includes(cleanName) && !cleanName.includes(dbName)) {
         throw new Error('NAME_MISMATCH');
-      }
-      if (dbServiceType !== sType) {
-        throw new Error('SERVICE_TYPE_MISMATCH');
       }
 
       return byInvoice;
@@ -141,7 +162,7 @@ export const participantService = {
       throw new Error('MOBILE_ALREADY_REGISTERED');
     }
 
-    // 3. Not in DB yet -> Return transient object WITHOUT writing to Supabase
+    // Not in DB yet -> Return transient object WITHOUT writing to Supabase
     return {
       isNew: true,
       id: null,
@@ -161,6 +182,7 @@ export const participantService = {
   registerParticipant: async (eventId, { name, mobile, invoiceNumber, serviceType, luckyNumber }) => {
     if (!eventId || !mobile || !invoiceNumber) return null;
     const sType = normalizeServiceType(serviceType);
+    const table = getTableForServiceType(sType);
 
     const cleanName = normName(name);
     const cleanMobile = normMobile(mobile);
@@ -169,7 +191,7 @@ export const participantService = {
       ? String(luckyNumber).trim().padStart(3, '0')
       : null;
 
-    const list = await participantService.getParticipants(eventId);
+    const list = await participantService.getParticipants(eventId, sType);
 
     const byInvoice = list.find(p => isInvoiceMatch(p.invoiceNumber || p.invoiceNo, cleanInvoice));
     const byMobile = list.find(p => normMobile(p.mobile || p.phone) === cleanMobile);
@@ -179,7 +201,6 @@ export const participantService = {
     if (targetParticipant) {
       const dbMobile = normMobile(targetParticipant.mobile || targetParticipant.phone);
       const dbName = normName(targetParticipant.customerName || targetParticipant.name);
-      const dbServiceType = normalizeServiceType(targetParticipant.serviceType);
 
       if (dbMobile !== cleanMobile) {
         throw new Error('INVOICE_MOBILE_MISMATCH');
@@ -187,18 +208,21 @@ export const participantService = {
       if (dbName && cleanName && dbName !== cleanName && !dbName.includes(cleanName) && !cleanName.includes(dbName)) {
         throw new Error('NAME_MISMATCH');
       }
-      if (dbServiceType !== sType) {
-        throw new Error('SERVICE_TYPE_MISMATCH');
-      }
 
       // Update lucky_number if not set
       if (cleanLuckyNumber && (!targetParticipant.luckyNumber || targetParticipant.luckyNumber !== cleanLuckyNumber)) {
         const { data: updated, error: uErr } = await supabase
-          .from('event_participants')
+          .from(table)
           .update({ lucky_number: cleanLuckyNumber })
           .eq('id', targetParticipant.id)
           .select()
-          .single();
+          .maybeSingle();
+
+        await supabase
+          .from('event_participants')
+          .update({ lucky_number: cleanLuckyNumber })
+          .eq('id', targetParticipant.id);
+
         if (!uErr && updated) return mapParticipantFromDb(updated);
       }
 
@@ -209,7 +233,7 @@ export const participantService = {
       throw new Error('MOBILE_ALREADY_REGISTERED');
     }
 
-    // 3. Insert new participant WITH luckyNumber in a single atomic insert!
+    // Insert new participant into specific table + legacy fallback
     const id = `usr_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
     const payload = {
@@ -226,13 +250,15 @@ export const participantService = {
     };
 
     const { data, error } = await supabase
-      .from('event_participants')
+      .from(table)
       .insert([payload])
       .select()
       .single();
 
+    await supabase.from('event_participants').insert([payload]).catch(() => {});
+
     if (error) {
-      console.error('Error registering participant in event_participants:', error);
+      console.error(`Error registering participant in ${table}:`, error);
       return null;
     }
     return mapParticipantFromDb(data);
@@ -241,6 +267,7 @@ export const participantService = {
   updateParticipant: async (eventId, participantId, { name, mobile, invoiceNumber, serviceType, luckyNumber, participating }) => {
     if (!eventId || !participantId) return null;
     const sType = normalizeServiceType(serviceType);
+    const table = getTableForServiceType(sType);
 
     const cleanName = String(name || '').trim();
     const cleanMobile = String(mobile || '').trim();
@@ -250,33 +277,30 @@ export const participantService = {
       : null;
 
     try {
-      const { data: existingRecord } = await supabase
-        .from('event_participants')
-        .select('*')
-        .eq('id', participantId)
-        .maybeSingle();
-
-      if (!existingRecord) return null;
-
       const updatedPayload = {
         customer_name: cleanName,
         mobile: cleanMobile,
         invoice_number: cleanInvoice,
         service_type: sType,
         lucky_number: cleanLuckyNumber,
-        participating: participating !== undefined ? Boolean(participating) : existingRecord.participating,
-        joined: cleanLuckyNumber ? true : existingRecord.joined
+        participating: participating !== undefined ? Boolean(participating) : false,
+        joined: cleanLuckyNumber ? true : false
       };
 
       const { data, error } = await supabase
-        .from('event_participants')
+        .from(table)
         .update(updatedPayload)
         .eq('id', participantId)
         .select()
-        .single();
+        .maybeSingle();
+
+      await supabase
+        .from('event_participants')
+        .update(updatedPayload)
+        .eq('id', participantId);
 
       if (error) {
-        console.error('Error updating participant in event_participants:', error);
+        console.error(`Error updating participant in ${table}:`, error);
         return null;
       }
       return mapParticipantFromDb(data);
@@ -289,9 +313,15 @@ export const participantService = {
   importParticipants: async (eventId, rawList, replaceMode = false, serviceType = 'NABL') => {
     if (!eventId) return [];
     const sType = normalizeServiceType(serviceType);
+    const table = getTableForServiceType(sType);
 
     try {
       if (replaceMode) {
+        await supabase
+          .from(table)
+          .delete()
+          .eq('event_id', eventId);
+
         await supabase
           .from('event_participants')
           .delete()
@@ -328,12 +358,14 @@ export const participantService = {
 
       if (freshEntries.length > 0) {
         const { error } = await supabase
-          .from('event_participants')
+          .from(table)
           .insert(freshEntries);
 
         if (error) {
-          console.error('Supabase importParticipants error in event_participants:', error);
+          console.error(`Supabase importParticipants error in ${table}:`, error);
         }
+
+        await supabase.from('event_participants').insert(freshEntries).catch(() => {});
       }
 
       return await participantService.getParticipants(eventId, sType);
@@ -345,30 +377,40 @@ export const participantService = {
 
   toggleParticipation: async (eventId, participantId, serviceType = null) => {
     if (!eventId || !participantId) return null;
+    const table = getTableForServiceType(serviceType);
 
     try {
-      const { data: existing } = await supabase
-        .from('event_participants')
-        .select('*')
-        .eq('id', participantId)
-        .maybeSingle();
+      let existing = null;
+
+      const { data: d1 } = await supabase.from(table).select('*').eq('id', participantId).maybeSingle();
+      existing = d1;
+
+      if (!existing) {
+        const { data: d2 } = await supabase.from('event_participants').select('*').eq('id', participantId).maybeSingle();
+        existing = d2;
+      }
 
       if (existing) {
         if (existing.joined) return null;
         const updatedStatus = !existing.participating;
 
         const { data, error } = await supabase
-          .from('event_participants')
+          .from(table)
           .update({ participating: updatedStatus })
           .eq('id', participantId)
           .select()
-          .single();
+          .maybeSingle();
+
+        await supabase
+          .from('event_participants')
+          .update({ participating: updatedStatus })
+          .eq('id', participantId);
 
         if (error) {
           console.error('Supabase toggleParticipation error:', error);
           return null;
         }
-        return mapParticipantFromDb(data);
+        return mapParticipantFromDb(data || existing);
       }
     } catch (err) {
       console.error('toggleParticipation exception:', err);
@@ -377,12 +419,11 @@ export const participantService = {
   },
 
   verifyParticipant: async (eventId, { name, mobile, invoiceNumber, serviceType }) => {
-    const normName = str => String(str || '').trim().toLowerCase().replace(/\s+/g, ' ');
-    const normMobile = str => String(str || '').trim().replace(/\D/g, '');
-    const normInvoice = str => String(str || '').trim().toLowerCase().replace(/^#\s*/, '');
+    const normNameStr = str => String(str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const normMobileStr = str => String(str || '').trim().replace(/\D/g, '');
 
-    const cleanName = normName(name);
-    const cleanMobile = normMobile(mobile);
+    const cleanName = normNameStr(name);
+    const cleanMobile = normMobileStr(mobile);
     const cleanInvoice = normInvoice(invoiceNumber);
 
     if (!cleanMobile || !cleanInvoice) return null;
@@ -390,13 +431,13 @@ export const participantService = {
     const list = await participantService.getParticipants(eventId, serviceType);
 
     const found = list.find(p => {
-      const pName = normName(p.customerName || p.name);
-      const pMob = normMobile(p.mobile || p.phone);
-      const pInv = normInvoice(p.invoiceNumber || p.invoiceNo);
+      const pName = normNameStr(p.customerName || p.name);
+      const pMob = normMobileStr(p.mobile || p.phone);
+      const pInv = p.invoiceNumber || p.invoiceNo;
 
       const nameMatch = !cleanName || pName === cleanName || pName.includes(cleanName) || cleanName.includes(pName);
       const mobileMatch = pMob === cleanMobile || (cleanMobile.length >= 7 && pMob.endsWith(cleanMobile)) || (pMob.length >= 7 && cleanMobile.endsWith(pMob));
-      const invoiceMatch = pInv === cleanInvoice || pInv.padStart(3, '0') === cleanInvoice.padStart(3, '0') || cleanInvoice.padStart(3, '0') === pInv;
+      const invoiceMatch = isInvoiceMatch(pInv, cleanInvoice);
 
       return nameMatch && mobileMatch && invoiceMatch;
     });
@@ -414,20 +455,22 @@ export const participantService = {
   assignLuckyNumber: async (eventId, participantId, luckyNumber, serviceType = null) => {
     if (!eventId || !participantId) return null;
     const formattedNum = String(luckyNumber).padStart(3, '0');
+    const table = getTableForServiceType(serviceType);
 
     try {
-      const { data, error } = await supabase
-        .from('event_participants')
-        .update({
-          lucky_number: formattedNum
-        })
+      const { data } = await supabase
+        .from(table)
+        .update({ lucky_number: formattedNum })
         .eq('id', participantId)
         .select()
         .maybeSingle();
 
-      if (data) {
-        return mapParticipantFromDb(data);
-      }
+      await supabase
+        .from('event_participants')
+        .update({ lucky_number: formattedNum })
+        .eq('id', participantId);
+
+      if (data) return mapParticipantFromDb(data);
     } catch (err) {
       console.error('assignLuckyNumber exception:', err);
     }
@@ -436,10 +479,11 @@ export const participantService = {
 
   markJoined: async (eventId, participantId, serviceType = null) => {
     if (!eventId || !participantId) return null;
+    const table = getTableForServiceType(serviceType);
 
     try {
-      const { data, error } = await supabase
-        .from('event_participants')
+      const { data } = await supabase
+        .from(table)
         .update({
           joined: true,
           joined_at: new Date().toISOString()
@@ -448,9 +492,15 @@ export const participantService = {
         .select()
         .maybeSingle();
 
-      if (data) {
-        return mapParticipantFromDb(data);
-      }
+      await supabase
+        .from('event_participants')
+        .update({
+          joined: true,
+          joined_at: new Date().toISOString()
+        })
+        .eq('id', participantId);
+
+      if (data) return mapParticipantFromDb(data);
     } catch (err) {
       console.error('markJoined exception:', err);
     }
@@ -459,8 +509,10 @@ export const participantService = {
 
   deleteParticipant: async (eventId, participantId, serviceType = null) => {
     if (!participantId) return [];
+    const table = getTableForServiceType(serviceType);
 
     try {
+      await supabase.from(table).delete().eq('id', participantId);
       await supabase.from('event_participants').delete().eq('id', participantId);
     } catch (err) {
       console.error('delete participant exception:', err);
@@ -469,10 +521,17 @@ export const participantService = {
     return await participantService.getParticipants(eventId, serviceType);
   },
 
-  bulkUpdateParticipation: async (eventId, participantIds = [], targetStatus) => {
+  bulkUpdateParticipation: async (eventId, participantIds = [], targetStatus, serviceType = null) => {
     if (!eventId || !Array.isArray(participantIds) || participantIds.length === 0) return [];
+    const table = getTableForServiceType(serviceType);
 
     try {
+      await supabase
+        .from(table)
+        .update({ participating: Boolean(targetStatus) })
+        .in('id', participantIds)
+        .is('joined_at', null);
+
       await supabase
         .from('event_participants')
         .update({ participating: Boolean(targetStatus) })
@@ -481,13 +540,19 @@ export const participantService = {
     } catch (err) {
       console.error('bulkUpdateParticipation exception:', err);
     }
-    return await participantService.getParticipants(eventId);
+    return await participantService.getParticipants(eventId, serviceType);
   },
 
-  bulkDeleteParticipants: async (eventId, participantIds = []) => {
+  bulkDeleteParticipants: async (eventId, participantIds = [], serviceType = null) => {
     if (!eventId || !Array.isArray(participantIds) || participantIds.length === 0) return [];
+    const table = getTableForServiceType(serviceType);
 
     try {
+      await supabase
+        .from(table)
+        .delete()
+        .in('id', participantIds);
+
       await supabase
         .from('event_participants')
         .delete()
@@ -495,14 +560,14 @@ export const participantService = {
     } catch (err) {
       console.error('bulkDeleteParticipants exception:', err);
     }
-    return await participantService.getParticipants(eventId);
+    return await participantService.getParticipants(eventId, serviceType);
   },
 
   // --- Winners Functionality ---
   getWinners: async (eventId, serviceType = null) => {
     if (!eventId) return [];
     try {
-      const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants';
+      const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants_nabl';
       let query = supabase
         .from(table)
         .select('*')
@@ -547,7 +612,6 @@ export const participantService = {
               })
               .eq('id', pId);
 
-            // Fallback sync to main event_participants table if id exists
             await supabase
               .from('event_participants')
               .update({
@@ -570,7 +634,7 @@ export const participantService = {
 
   publishWinners: async (eventId, unPublishedWinners, serviceType = null) => {
     if (!eventId) return [];
-    const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants';
+    const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants_nabl';
     try {
       await supabase
         .from(table)
@@ -578,14 +642,11 @@ export const participantService = {
         .eq('event_id', eventId)
         .eq('winner', true);
 
-      if (serviceType) {
-        await supabase
-          .from('event_participants')
-          .update({ published: true })
-          .eq('event_id', eventId)
-          .eq('service_type', normalizeServiceType(serviceType))
-          .eq('winner', true);
-      }
+      await supabase
+        .from('event_participants')
+        .update({ published: true })
+        .eq('event_id', eventId)
+        .eq('winner', true);
 
       return await participantService.getWinners(eventId, serviceType);
     } catch (err) {
@@ -596,7 +657,7 @@ export const participantService = {
 
   resetWinners: async (eventId, serviceType = null) => {
     if (!eventId) return [];
-    const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants';
+    const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants_nabl';
     try {
       await supabase
         .from(table)
@@ -609,19 +670,16 @@ export const participantService = {
         })
         .eq('event_id', eventId);
 
-      if (serviceType) {
-        await supabase
-          .from('event_participants')
-          .update({
-            winner: false,
-            winner_rank: null,
-            prize_name: null,
-            published: false,
-            drawn_at: null
-          })
-          .eq('event_id', eventId)
-          .eq('service_type', normalizeServiceType(serviceType));
-      }
+      await supabase
+        .from('event_participants')
+        .update({
+          winner: false,
+          winner_rank: null,
+          prize_name: null,
+          published: false,
+          drawn_at: null
+        })
+        .eq('event_id', eventId);
 
       return [];
     } catch (err) {
