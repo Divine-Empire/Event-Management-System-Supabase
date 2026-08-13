@@ -1,6 +1,6 @@
 import React from 'react';
-import { AlertCircle, ShieldCheck, Check } from 'lucide-react';
-import { ParticipantEventShell, ParticipantBlockedNotice } from '@/components/participant/ParticipantEventShell';
+import { AlertCircle, ShieldCheck, Check, LogIn, Lock, ArrowRight } from 'lucide-react';
+import { ParticipantEventShell } from '@/components/participant/ParticipantEventShell';
 import { useParticipantEvent } from '@/context/ParticipantEventContext';
 
 export const ParticipantVerificationPage = () => {
@@ -18,7 +18,9 @@ export const ParticipantVerificationPage = () => {
     isSubmitting,
     notFound,
     computedStatus,
-    handleRegisterOrVerify
+    handleRegisterOrVerify,
+    handleLoginOnly,
+    handleGoToLive
   } = useParticipantEvent();
 
   if (isLoading) {
@@ -30,27 +32,98 @@ export const ParticipantVerificationPage = () => {
     );
   }
 
+  // Handle Event Not Found or Event Deleted
   if (!event) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center p-4">
-        <div className="text-center max-w-sm bg-white border border-slate-200 p-6 rounded-3xl shadow-md">
-          <AlertCircle size={40} className="mx-auto text-amber-500 mb-3" />
-          <h2 className="text-xl font-bold text-slate-900 mb-1">Event Not Found</h2>
-          <p className="text-slate-500 text-xs mb-4">The event link you followed is invalid or has expired.</p>
-          <a href="/admin/login" className="text-xs font-bold text-blue-900 hover:underline">Organizer Login</a>
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="text-center max-w-sm bg-white border border-slate-200 p-8 rounded-3xl shadow-xl flex flex-col items-center">
+          <div className="w-14 h-14 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-center text-red-500 mb-4 shadow-xs">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-xl font-extrabold text-slate-900 mb-1">Event Not Exist</h2>
+          <p className="text-slate-500 text-xs leading-relaxed">
+            This event does not exist or has been deleted by the organizer. The event link is no longer valid.
+          </p>
         </div>
       </div>
     );
   }
 
+  // When Event is LIVE or ENDED — New registrations are blocked, but existing participants can log in with Mobile + Invoice
   if (computedStatus === 'LIVE' || computedStatus === 'ENDED') {
     return (
       <ParticipantEventShell showPrizePreview={false}>
-        <ParticipantBlockedNotice />
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col gap-4">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-3.5">
+            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-600 shrink-0">
+              <Lock size={20} />
+            </div>
+            <div>
+              <h2 className="text-base font-extrabold text-slate-900">
+                {computedStatus === 'ENDED' ? 'Event Completed — Participant Login' : 'Live Draw in Progress — Participant Login'}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                New registrations are now closed. Registered participants can log in below with Mobile & Invoice Number to view live reveals and winners.
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleLoginOnly} className="flex flex-col gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-slate-600">Registered Mobile Number *</label>
+                <input
+                  type="tel"
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  placeholder="e.g. 9876543210"
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-900 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-slate-600">Invoice Number *</label>
+                <input
+                  type="text"
+                  value={invoiceNumber}
+                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  placeholder="e.g. 001 or INV-1001"
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-900 font-medium font-mono"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 mt-1">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2 text-xs disabled:opacity-50"
+              >
+                <LogIn size={16} />
+                {isSubmitting ? 'Logging in...' : (computedStatus === 'ENDED' ? 'Login & View Winners' : 'Login & View Live Draw')}
+              </button>
+            </div>
+          </form>
+
+          {notFound && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2 text-red-900">
+              <AlertCircle size={16} className="text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-xs">Participant Not Found</p>
+                <p className="text-[11px] text-red-700 mt-0.5">
+                  No registered participant was found matching this Mobile Number and Invoice Number. Please check your details and try again.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </ParticipantEventShell>
     );
   }
 
+  // Pre-live registration and verification form
   return (
     <ParticipantEventShell showPrizePreview={false}>
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col gap-3.5">

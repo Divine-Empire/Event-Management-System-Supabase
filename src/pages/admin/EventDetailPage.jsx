@@ -67,8 +67,10 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
         setEvent(evt);
         const parts = await participantStorage.getParticipants(evt.id);
         setParticipants(Array.isArray(parts) ? parts : []);
-        const wins = await winnerStorage.getWinners(evt.id);
-        setWinners(Array.isArray(wins) ? wins : []);
+        const nablWins = await winnerStorage.getWinners(evt.id, 'NABL');
+        const tsWins = await winnerStorage.getWinners(evt.id, 'TOTAL_STATION');
+        const allWins = [...(Array.isArray(nablWins) ? nablWins : []), ...(Array.isArray(tsWins) ? tsWins : [])];
+        setWinners(allWins);
         
         setPrizesNabl(evt.prizesNabl || evt.prizes || []);
         setPrizesTs(evt.prizesTs || evt.prizes || []);
@@ -455,24 +457,37 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
             <div className="bg-white border border-indigo-200/70 rounded-2xl p-5 shadow-xs flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider">Total Winner Slots</span>
-                <p className="text-3xl font-black text-indigo-950 mt-1">10</p>
-                <span className="text-[10px] font-semibold text-slate-400">5 NABL + 5 Total Station</span>
+                <p className="text-3xl font-black text-indigo-950 mt-1">
+                  {selectedService === 'NABL' ? prizesNabl.length : selectedService === 'TOTAL_STATION' ? prizesTs.length : (prizesNabl.length + prizesTs.length)}
+                </p>
+                <span className="text-[10px] font-semibold text-slate-400">
+                  {selectedService === 'NABL' ? 'NABL Service Stream' : selectedService === 'TOTAL_STATION' ? 'Total Station Stream' : `${prizesNabl.length} NABL + ${prizesTs.length} Total Station`}
+                </span>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
                 <Gift size={22} />
               </div>
             </div>
 
-            <div className="bg-white border border-amber-200/70 rounded-2xl p-5 shadow-xs flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider">Winners Drawn</span>
-                <p className="text-3xl font-black text-amber-950 mt-1">{winners.length}</p>
-                <span className="text-[10px] font-semibold text-slate-400">{winners.length === 10 ? 'All Slots Filled' : `${10 - winners.length} Pending`}</span>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
-                <Trophy size={22} />
-              </div>
-            </div>
+            {(() => {
+              const currentTotalSlots = selectedService === 'NABL' ? prizesNabl.length : selectedService === 'TOTAL_STATION' ? prizesTs.length : (prizesNabl.length + prizesTs.length);
+              const currentDrawnCount = selectedService === 'NABL' ? nablWinners.length : selectedService === 'TOTAL_STATION' ? tsWinners.length : (nablWinners.length + tsWinners.length);
+              const isFilled = currentTotalSlots > 0 && currentDrawnCount >= currentTotalSlots;
+              return (
+                <div className="bg-white border border-amber-200/70 rounded-2xl p-5 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider">Winners Drawn</span>
+                    <p className="text-3xl font-black text-amber-950 mt-1">{currentDrawnCount}</p>
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      {isFilled ? 'All Slots Filled' : `${Math.max(0, currentTotalSlots - currentDrawnCount)} Pending`}
+                    </span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                    <Trophy size={22} />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Configured Prizes Information Roster - NABL */}

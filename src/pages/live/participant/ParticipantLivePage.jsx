@@ -70,7 +70,7 @@ export const ParticipantLivePage = () => {
     }
   }, [session?.current_rank]);
 
-  const joinedParticipants = participants.filter(p => p.participating && (p.joined || (p.luckyNumber && String(p.luckyNumber).trim() !== '')));
+  const joinedParticipants = participants.filter(p => p.participating && Boolean(p.joined));
   const currentLoggedUser = participants.find(p => p.id === loggedUser?.id || p.invoiceNumber === loggedUser?.invoiceNumber) || loggedUser;
 
   const rawTicket = currentLoggedUser?.luckyNumber || currentLoggedUser?.invoiceNumber || joinedParticipants[0]?.luckyNumber || '001';
@@ -118,13 +118,20 @@ export const ParticipantLivePage = () => {
     );
   }
 
-  const publishedRankWinners = winners.filter(w => Number(w.rank) === Number(selectedRank) || Number(w.winnerRank) === Number(selectedRank));
+  const isCurrentRankInCountdown = (session?.phase === 'BUILDUP' || session?.phase === 'COUNTDOWN' || session?.phase === 'NEXT_DRAW') && Number(session?.current_rank) === Number(selectedRank);
+
+  const publishedRankWinners = isCurrentRankInCountdown
+    ? []
+    : winners.filter(w => Number(w.rank) === Number(selectedRank) || Number(w.winnerRank) === Number(selectedRank));
+
   const currentWinner = publishedRankWinners.length > 0 ? {
     customerName: Array.from(new Set(publishedRankWinners.map(w => w.customerName || w.name || w.customerNames))).join(', '),
     luckyNumber: publishedRankWinners[0]?.luckyNumber || publishedRankWinners[0]?.winningNumber || publishedRankWinners[0]?.invoiceNumber
   } : null;
 
-  const activeWinningNumber = currentWinner?.luckyNumber || (Number(session?.current_rank) === Number(selectedRank) ? session?.current_winner_lucky_number : null);
+  const activeWinningNumber = isCurrentRankInCountdown
+    ? null
+    : (currentWinner?.luckyNumber || (Number(session?.current_rank) === Number(selectedRank) ? session?.current_winner_lucky_number : null));
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans w-full">

@@ -192,6 +192,53 @@ export const ParticipantEventProvider = ({ children }) => {
     }
   };
 
+  const handleLoginOnly = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setNotFound(false);
+
+    if (!mobile.trim() || !invoiceNumber.trim()) {
+      toast.error('Please enter both Mobile Number and Invoice Number');
+      return;
+    }
+
+    if (!event) {
+      toast.error('Event not found');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const reg = await participantService.loginParticipantByMobileAndInvoice(event.id, {
+        mobile: mobile.trim(),
+        invoiceNumber: invoiceNumber.trim()
+      });
+
+      if (!reg) {
+        setNotFound(true);
+        toast.error('Participant details not found. Please check your Mobile Number and Invoice Number.');
+        return;
+      }
+
+      if (reg.id && !reg.joined) {
+        try {
+          await joinEvent(reg.id, event.id);
+        } catch (error) {
+          console.error('Error marking participant as joined:', error);
+        }
+      }
+
+      setVerifiedParticipant(reg);
+      saveParticipantSession(event.id, reg);
+      toast.success('Login successful! Redirecting to live draw portal...');
+      navigate(`/live/${token || event.token}`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Login failed. Please check your details and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDigitChange = (index, value) => {
     const cleanVal = value.replace(/\D/g, '');
     if (!cleanVal && value !== '') return;
@@ -367,6 +414,7 @@ export const ParticipantEventProvider = ({ children }) => {
     isJoining,
     isRefreshing,
     handleRegisterOrVerify,
+    handleLoginOnly,
     handleDigitChange,
     handleDigitKeyDown,
     handleDigitPaste,

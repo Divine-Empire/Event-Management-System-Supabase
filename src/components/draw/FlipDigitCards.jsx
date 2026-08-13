@@ -55,7 +55,7 @@ export const FlipDigitCards = forwardRef(({
   const eligibleParticipants = (participants || []).filter(p => {
     if (!p) return false;
     if (p.winner) return false;
-    const isJoined = p.participating && (p.joined || (p.luckyNumber && String(p.luckyNumber).trim() !== ''));
+    const isJoined = p.participating && Boolean(p.joined);
     if (!isJoined) return false;
 
     const pNum = p.luckyNumber ? String(p.luckyNumber).trim() : '';
@@ -75,42 +75,46 @@ export const FlipDigitCards = forwardRef(({
     return raw.slice(-3).split('');
   };
 
+  const lockedDigitsRef = useRef([false, false, false]);
+
   const spinToWinner = (targetWinner) => {
     if (isFlipping) return;
     setIsFlipping(true);
+    lockedDigitsRef.current = [false, false, false];
     setLockedDigits([false, false, false]);
 
     const winnerNum = targetWinner?.luckyNumber || targetWinner?.winningNumber || targetWinner?.invoiceNumber || targetWinner?.invoiceNo || '000';
     const targetDigits = formatInvoiceDigits(winnerNum);
 
-    // Rapid random digit roller interval
+    // Rapid random digit roller interval reading from ref
     const rollInterval = setInterval(() => {
-      setCurrentDigits(prev => [
-        lockedDigits[0] ? targetDigits[0] : String(Math.floor(Math.random() * 10)),
-        lockedDigits[1] ? targetDigits[1] : String(Math.floor(Math.random() * 10)),
-        lockedDigits[2] ? targetDigits[2] : String(Math.floor(Math.random() * 10))
+      setCurrentDigits([
+        lockedDigitsRef.current[0] ? targetDigits[0] : String(Math.floor(Math.random() * 10)),
+        lockedDigitsRef.current[1] ? targetDigits[1] : String(Math.floor(Math.random() * 10)),
+        lockedDigitsRef.current[2] ? targetDigits[2] : String(Math.floor(Math.random() * 10))
       ]);
     }, 60);
 
-    // Step 1: Lock Digit 1 at 1.0s
+    // Step 1: Lock Digit 1 at 0.6s
     setTimeout(() => {
+      lockedDigitsRef.current = [true, false, false];
       setLockedDigits([true, false, false]);
-      setCurrentDigits(prev => [targetDigits[0], prev[1], prev[2]]);
-    }, 1000);
+    }, 600);
 
-    // Step 2: Lock Digit 2 at 1.8s
+    // Step 2: Lock Digit 2 at 1.2s
     setTimeout(() => {
+      lockedDigitsRef.current = [true, true, false];
       setLockedDigits([true, true, false]);
-      setCurrentDigits(prev => [targetDigits[0], targetDigits[1], prev[2]]);
-    }, 1800);
+    }, 1200);
 
-    // Step 3: Lock Digit 3 at 2.6s & Finish
+    // Step 3: Lock Digit 3 at 1.8s & Finish
     setTimeout(() => {
       clearInterval(rollInterval);
+      lockedDigitsRef.current = [true, true, true];
       setLockedDigits([true, true, true]);
       setCurrentDigits(targetDigits);
       setIsFlipping(false);
-    }, 2600);
+    }, 1800);
   };
 
   useImperativeHandle(ref, () => ({

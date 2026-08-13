@@ -34,13 +34,35 @@ export const AdminLivePage = () => {
   const [activeService, setActiveService] = useState('NABL'); // 'NABL' | 'TOTAL_STATION'
   const [selectedRank, setSelectedRank] = useState(1);
 
-  // Spinning states per service
-  const [isSpinningNabl, setIsSpinningNabl] = useState(false);
-  const [isSpinningTs, setIsSpinningTs] = useState(false);
+  // Spinning states per service (backed by refs to prevent stale closure stalls)
+  const isSpinningNablRef = useRef(false);
+  const isSpinningTsRef = useRef(false);
+  const [isSpinningNabl, _setIsSpinningNabl] = useState(false);
+  const [isSpinningTs, _setIsSpinningTs] = useState(false);
 
-  // Auto-running flags per service
-  const [isAutoRunningNabl, setIsAutoRunningNabl] = useState(true);
-  const [isAutoRunningTs, setIsAutoRunningTs] = useState(true);
+  const setIsSpinningNabl = (val) => {
+    isSpinningNablRef.current = Boolean(val);
+    _setIsSpinningNabl(Boolean(val));
+  };
+  const setIsSpinningTs = (val) => {
+    isSpinningTsRef.current = Boolean(val);
+    _setIsSpinningTs(Boolean(val));
+  };
+
+  // Auto-running flags per service (backed by refs)
+  const isAutoRunningNablRef = useRef(true);
+  const isAutoRunningTsRef = useRef(true);
+  const [isAutoRunningNabl, _setIsAutoRunningNabl] = useState(true);
+  const [isAutoRunningTs, _setIsAutoRunningTs] = useState(true);
+
+  const setIsAutoRunningNabl = (val) => {
+    isAutoRunningNablRef.current = Boolean(val);
+    _setIsAutoRunningNabl(Boolean(val));
+  };
+  const setIsAutoRunningTs = (val) => {
+    isAutoRunningTsRef.current = Boolean(val);
+    _setIsAutoRunningTs(Boolean(val));
+  };
 
   const [isEnding, setIsEnding] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
@@ -61,7 +83,7 @@ export const AdminLivePage = () => {
   const { preLiveSeconds, reverseCountdown } = useLiveClock(event, session?.phase_ends_at, activeService);
   const { drawNextWinnerForRank } = useDrawStore();
 
-  const joinedParticipants = participants.filter(p => p.participating && (p.joined || (p.luckyNumber && String(p.luckyNumber).trim() !== '')));
+  const joinedParticipants = participants.filter(p => p.participating && Boolean(p.joined));
   const activePrize = prizes.find(p => Number(p.rank) === Number(selectedRank)) || prizes[0];
   const prizeImg = activePrize?.image || activePrize?.img || activePrize?.picture || activePrize?.logo || '';
 
@@ -86,6 +108,13 @@ export const AdminLivePage = () => {
   const tsPrizesRef = useRef(tsPrizes);
   const tsPartsRef = useRef(tsParts);
   const tsSessionRef = useRef(tsSession);
+
+  // Sync selectedRank with active live session current_rank
+  useEffect(() => {
+    if (session?.current_rank) {
+      setSelectedRank(session.current_rank);
+    }
+  }, [session?.current_rank]);
 
   // Sync NABL Refs
   useEffect(() => {
@@ -173,28 +202,19 @@ export const AdminLivePage = () => {
       setSelectedRank(targetRank);
     }
 
-    // 1. Build Up Phase (2 seconds)
-    const buildUpSession = {
-      phase: 'BUILDUP',
-      current_rank: targetRank,
-      total_ranks: currentPrizes.length,
-      phase_started_at: new Date().toISOString()
-    };
-    await liveSessionService.upsertLiveSession(event.id, targetServiceType, buildUpSession);
-    await new Promise(r => setTimeout(r, 2000));
+    // Only show countdown for Rank 1 if starting fresh
+    if (Number(targetRank) === 1) {
+      const countdownSession = {
+        phase: 'COUNTDOWN',
+        current_rank: targetRank,
+        phase_started_at: new Date().toISOString(),
+        phase_ends_at: new Date(Date.now() + 1000).toISOString()
+      };
+      await liveSessionService.upsertLiveSession(event.id, targetServiceType, countdownSession);
+      await new Promise(r => setTimeout(r, 1000));
+    }
 
-    // 2. Reverse Countdown Phase (5 seconds)
-    const phaseEndsAt = new Date(Date.now() + 5000).toISOString();
-    const countdownSession = {
-      phase: 'COUNTDOWN',
-      current_rank: targetRank,
-      phase_started_at: new Date().toISOString(),
-      phase_ends_at: phaseEndsAt
-    };
-    await liveSessionService.upsertLiveSession(event.id, targetServiceType, countdownSession);
-    await new Promise(r => setTimeout(r, 5000));
-
-    // 3. Drawing Phase
+    // Direct Drawing Phase for instant digit card flip animation
     setIsSpinning(true);
     const drawingSession = {
       phase: 'DRAWING',
@@ -203,7 +223,7 @@ export const AdminLivePage = () => {
     };
     await liveSessionService.upsertLiveSession(event.id, targetServiceType, drawingSession);
 
-    const availableParts = currentParts.filter(p => p.participating && (p.joined || (p.luckyNumber && String(p.luckyNumber).trim() !== '')));
+    const availableParts = currentParts.filter(p => p.participating && Boolean(p.joined));
     const res = drawNextWinnerForRank(targetRank, prize.name || `Rank ${targetRank}`, availableParts, event.id, currentWinners);
 
     if (res.success && res.winner) {
@@ -222,7 +242,7 @@ export const AdminLivePage = () => {
       const winnerName = res.winner.customerName || res.winner.name || 'Winner';
       const luckyNo = res.winner.luckyNumber || res.winner.winningNumber || res.winner.invoiceNumber;
 
-      // 4. Revealed Phase
+      // Revealed Phase
       const revealedSession = {
         phase: 'REVEALED',
         current_rank: targetRank,
@@ -257,85 +277,11 @@ export const AdminLivePage = () => {
     }
 
     setIsSpinning(false);
-    // Hold revealed winner for 4 seconds before unlocking next rank
-    await new Promise(r => setTimeout(r, 4000));
+    // Hold revealed winner for 1.5 seconds, then immediately start next rank draw
+    await new Promise(r => setTimeout(r, 1500));
     autoLockRef.current = false;
     setIsDrawingActive(false);
   };
-
-  // NABL Automatic Draw Loop
-  useEffect(() => {
-    if (!event || isCompleted) return;
-
-    const autoLoop = async () => {
-      const liveMs = getLiveMs(event, 'NABL');
-      if (liveMs > 0 && Date.now() < liveMs) return; // Not live time yet
-
-      if (!isAutoRunningNabl) return;
-      if (nablAutoLockRef.current || isSpinningNabl) return;
-      
-      const currentPhase = nablSessionRef.current?.phase;
-      if (currentPhase === 'BUILDUP' || currentPhase === 'COUNTDOWN' || currentPhase === 'DRAWING') return;
-
-      const currentPrizes = nablPrizesRef.current || [];
-      const currentWinners = nablWinnersRef.current || [];
-
-      const sortedPrizes = [...currentPrizes].sort((a, b) => Number(a.rank) - Number(b.rank));
-      const unrevealedPrize = sortedPrizes.find(p => {
-        const pRank = Number(p.rank);
-        if (nablDrawnRanksRef.current.has(pRank)) return false;
-        const hasW = currentWinners.some(w => Number(w.rank) === pRank || Number(w.winnerRank) === pRank);
-        return !hasW;
-      });
-
-      if (!unrevealedPrize) {
-        setIsAutoRunningNabl(false);
-        return;
-      }
-
-      await triggerDrawForRank(unrevealedPrize.rank, 'NABL');
-    };
-
-    const interval = setInterval(autoLoop, 1500);
-    return () => clearInterval(interval);
-  }, [event, isAutoRunningNabl, isCompleted]);
-
-  // TOTAL STATION Automatic Draw Loop
-  useEffect(() => {
-    if (!event || isCompleted) return;
-
-    const autoLoop = async () => {
-      const liveMs = getLiveMs(event, 'TOTAL_STATION');
-      if (liveMs > 0 && Date.now() < liveMs) return; // Not live time yet
-
-      if (!isAutoRunningTs) return;
-      if (tsAutoLockRef.current || isSpinningTs) return;
-      
-      const currentPhase = tsSessionRef.current?.phase;
-      if (currentPhase === 'BUILDUP' || currentPhase === 'COUNTDOWN' || currentPhase === 'DRAWING') return;
-
-      const currentPrizes = tsPrizesRef.current || [];
-      const currentWinners = tsWinnersRef.current || [];
-
-      const sortedPrizes = [...currentPrizes].sort((a, b) => Number(a.rank) - Number(b.rank));
-      const unrevealedPrize = sortedPrizes.find(p => {
-        const pRank = Number(p.rank);
-        if (tsDrawnRanksRef.current.has(pRank)) return false;
-        const hasW = currentWinners.some(w => Number(w.rank) === pRank || Number(w.winnerRank) === pRank);
-        return !hasW;
-      });
-
-      if (!unrevealedPrize) {
-        setIsAutoRunningTs(false);
-        return;
-      }
-
-      await triggerDrawForRank(unrevealedPrize.rank, 'TOTAL_STATION');
-    };
-
-    const interval = setInterval(autoLoop, 1500);
-    return () => clearInterval(interval);
-  }, [event, isAutoRunningTs, isCompleted]);
 
   const handleConfirmAndEndEvent = () => {
     setEndConfirmOpen(true);
@@ -383,14 +329,22 @@ export const AdminLivePage = () => {
     );
   }
 
-  const publishedRankWinners = winners.filter(w => Number(w.rank) === Number(selectedRank) || Number(w.winnerRank) === Number(selectedRank));
+  // Mask winner data during countdown / preparation / next draw phases
+  const isCurrentRankInCountdown = (session?.phase === 'BUILDUP' || session?.phase === 'COUNTDOWN' || session?.phase === 'NEXT_DRAW') && Number(session?.current_rank) === Number(selectedRank);
+
+  const publishedRankWinners = isCurrentRankInCountdown
+    ? []
+    : winners.filter(w => Number(w.rank) === Number(selectedRank) || Number(w.winnerRank) === Number(selectedRank));
+
   const currentWinner = publishedRankWinners.length > 0 ? {
     customerName: Array.from(new Set(publishedRankWinners.map(w => w.customerName || w.name || w.customerNames))).join(', '),
     luckyNumber: publishedRankWinners[0]?.luckyNumber || publishedRankWinners[0]?.winningNumber || publishedRankWinners[0]?.invoiceNumber,
     rank: selectedRank
   } : null;
 
-  const activeWinningNumber = currentWinner?.luckyNumber || (Number(session?.current_rank) === Number(selectedRank) ? session?.current_winner_lucky_number : null);
+  const activeWinningNumber = isCurrentRankInCountdown
+    ? null
+    : (currentWinner?.luckyNumber || (Number(session?.current_rank) === Number(selectedRank) ? session?.current_winner_lucky_number : null));
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans w-full">
