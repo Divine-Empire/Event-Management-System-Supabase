@@ -1,5 +1,20 @@
 import { supabase } from '@/lib/supabase';
 
+const normInvoice = str => String(str || '').trim().toUpperCase().replace(/^#+\s*/, '');
+const normMobile = str => String(str || '').trim().replace(/\D/g, '');
+const normName = str => String(str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+const isInvoiceMatch = (inv1, inv2) => {
+  const n1 = normInvoice(inv1);
+  const n2 = normInvoice(inv2);
+  if (!n1 || !n2) return false;
+  if (n1 === n2) return true;
+  if (/^\d+$/.test(n1) && /^\d+$/.test(n2)) {
+    return Number(n1) === Number(n2);
+  }
+  return false;
+};
+
 const normalizeServiceType = (serviceType) => {
   if (!serviceType) return 'NABL';
   const s = String(serviceType).toUpperCase().trim();
@@ -64,16 +79,21 @@ export const participantService = {
 
   getParticipants: async (eventId, serviceType = null) => {
     if (!eventId) return [];
+
     try {
-      const table = serviceType ? getTableForServiceType(serviceType) : 'event_participants';
-      const { data, error } = await supabase
-        .from(table)
+      let query = supabase
+        .from('event_participants')
         .select('*')
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: true });
+        .eq('event_id', eventId);
+
+      if (serviceType) {
+        query = query.eq('service_type', normalizeServiceType(serviceType));
+      }
+
+      const { data, error } = await query;
 
       if (error) {
-        console.error(`Supabase getParticipants error on ${table}:`, error);
+        console.error('Supabase getParticipants error:', error);
         return [];
       }
       return (data || []).map(p => mapParticipantFromDb(p));
@@ -87,46 +107,37 @@ export const participantService = {
     if (!eventId || !mobile || !invoiceNumber) return null;
     const sType = normalizeServiceType(serviceType);
 
-    const cleanName = String(name || '').trim();
-    const cleanMobile = String(mobile || '').trim();
-    const cleanInvoice = String(invoiceNumber || '').trim();
+    const cleanName = normName(name);
+    const cleanMobile = normMobile(mobile);
+    const cleanInvoice = normInvoice(invoiceNumber);
 
-    // 1. Look up by invoice number
-    const { data: byInvoice } = await supabase
-      .from('event_participants')
-      .select('*')
-      .eq('event_id', eventId)
-      .eq('invoice_number', cleanInvoice)
-      .maybeSingle();
+    const list = await participantService.getParticipants(eventId);
+
+    const byInvoice = list.find(p => isInvoiceMatch(p.invoiceNumber || p.invoiceNo, cleanInvoice));
+    const byMobile = list.find(p => normMobile(p.mobile || p.phone) === cleanMobile);
 
     if (byInvoice) {
-      const dbMobile = String(byInvoice.mobile || '').trim();
-      const dbName = String(byInvoice.customer_name || '').trim().toLowerCase();
-      const inputName = cleanName.toLowerCase();
-      const dbServiceType = normalizeServiceType(byInvoice.service_type);
+      const dbMobile = normMobile(byInvoice.mobile || byInvoice.phone);
+      const dbName = normName(byInvoice.customerName || byInvoice.name);
+      const dbServiceType = normalizeServiceType(byInvoice.serviceType);
 
       if (dbMobile !== cleanMobile) {
         throw new Error('INVOICE_MOBILE_MISMATCH');
       }
-      if (dbName !== inputName) {
+      if (dbName && cleanName && dbName !== cleanName && !dbName.includes(cleanName) && !cleanName.includes(dbName)) {
         throw new Error('NAME_MISMATCH');
       }
       if (dbServiceType !== sType) {
         throw new Error('SERVICE_TYPE_MISMATCH');
       }
 
-      return mapParticipantFromDb(byInvoice);
+      return byInvoice;
     }
 
-    // 2. Look up by mobile number
-    const { data: byMobile } = await supabase
-      .from('event_participants')
-      .select('*')
-      .eq('event_id', eventId)
-      .eq('mobile', cleanMobile)
-      .maybeSingle();
-
     if (byMobile) {
+      if (isInvoiceMatch(byMobile.invoiceNumber || byMobile.invoiceNo, cleanInvoice)) {
+        return byMobile;
+      }
       throw new Error('MOBILE_ALREADY_REGISTERED');
     }
 
@@ -135,11 +146,11 @@ export const participantService = {
       isNew: true,
       id: null,
       eventId,
-      customerName: cleanName,
-      name: cleanName,
-      mobile: cleanMobile,
-      invoiceNumber: cleanInvoice,
-      invoiceNo: cleanInvoice,
+      customerName: String(name || '').trim(),
+      name: String(name || '').trim(),
+      mobile: String(mobile || '').trim(),
+      invoiceNumber: String(invoiceNumber || '').trim(),
+      invoiceNo: String(invoiceNumber || '').trim(),
       serviceType: sType,
       luckyNumber: null,
       participating: false,
@@ -151,31 +162,29 @@ export const participantService = {
     if (!eventId || !mobile || !invoiceNumber) return null;
     const sType = normalizeServiceType(serviceType);
 
-    const cleanName = String(name || '').trim();
-    const cleanMobile = String(mobile || '').trim();
-    const cleanInvoice = String(invoiceNumber || '').trim();
+    const cleanName = normName(name);
+    const cleanMobile = normMobile(mobile);
+    const cleanInvoice = normInvoice(invoiceNumber);
     const cleanLuckyNumber = luckyNumber != null && String(luckyNumber).trim() !== ''
       ? String(luckyNumber).trim().padStart(3, '0')
       : null;
 
-    // 1. Look up by invoice number
-    const { data: byInvoice } = await supabase
-      .from('event_participants')
-      .select('*')
-      .eq('event_id', eventId)
-      .eq('invoice_number', cleanInvoice)
-      .maybeSingle();
+    const list = await participantService.getParticipants(eventId);
 
-    if (byInvoice) {
-      const dbMobile = String(byInvoice.mobile || '').trim();
-      const dbName = String(byInvoice.customer_name || '').trim().toLowerCase();
-      const inputName = cleanName.toLowerCase();
-      const dbServiceType = normalizeServiceType(byInvoice.service_type);
+    const byInvoice = list.find(p => isInvoiceMatch(p.invoiceNumber || p.invoiceNo, cleanInvoice));
+    const byMobile = list.find(p => normMobile(p.mobile || p.phone) === cleanMobile);
+
+    const targetParticipant = byInvoice || (byMobile && isInvoiceMatch(byMobile.invoiceNumber || byMobile.invoiceNo, cleanInvoice) ? byMobile : null);
+
+    if (targetParticipant) {
+      const dbMobile = normMobile(targetParticipant.mobile || targetParticipant.phone);
+      const dbName = normName(targetParticipant.customerName || targetParticipant.name);
+      const dbServiceType = normalizeServiceType(targetParticipant.serviceType);
 
       if (dbMobile !== cleanMobile) {
         throw new Error('INVOICE_MOBILE_MISMATCH');
       }
-      if (dbName !== inputName) {
+      if (dbName && cleanName && dbName !== cleanName && !dbName.includes(cleanName) && !cleanName.includes(dbName)) {
         throw new Error('NAME_MISMATCH');
       }
       if (dbServiceType !== sType) {
@@ -183,26 +192,18 @@ export const participantService = {
       }
 
       // Update lucky_number if not set
-      if (cleanLuckyNumber && (!byInvoice.lucky_number || byInvoice.lucky_number !== cleanLuckyNumber)) {
+      if (cleanLuckyNumber && (!targetParticipant.luckyNumber || targetParticipant.luckyNumber !== cleanLuckyNumber)) {
         const { data: updated, error: uErr } = await supabase
           .from('event_participants')
           .update({ lucky_number: cleanLuckyNumber })
-          .eq('id', byInvoice.id)
+          .eq('id', targetParticipant.id)
           .select()
           .single();
         if (!uErr && updated) return mapParticipantFromDb(updated);
       }
 
-      return mapParticipantFromDb(byInvoice);
+      return targetParticipant;
     }
-
-    // 2. Look up by mobile number
-    const { data: byMobile } = await supabase
-      .from('event_participants')
-      .select('*')
-      .eq('event_id', eventId)
-      .eq('mobile', cleanMobile)
-      .maybeSingle();
 
     if (byMobile) {
       throw new Error('MOBILE_ALREADY_REGISTERED');
@@ -214,9 +215,9 @@ export const participantService = {
     const payload = {
       id,
       event_id: eventId,
-      invoice_number: cleanInvoice,
-      customer_name: cleanName,
-      mobile: cleanMobile,
+      invoice_number: String(invoiceNumber || '').trim(),
+      customer_name: String(name || '').trim(),
+      mobile: String(mobile || '').trim(),
       service_type: sType,
       lucky_number: cleanLuckyNumber,
       participating: false,
