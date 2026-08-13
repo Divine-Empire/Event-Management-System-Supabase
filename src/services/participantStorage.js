@@ -37,6 +37,14 @@ export const participantStorage = {
     return await participantService.deleteParticipant(eventId, participantId, serviceType);
   },
 
+  bulkUpdateParticipation: async (eventId, participantIds, targetStatus) => {
+    return await participantService.bulkUpdateParticipation(eventId, participantIds, targetStatus);
+  },
+
+  bulkDeleteParticipants: async (eventId, participantIds) => {
+    return await participantService.bulkDeleteParticipants(eventId, participantIds);
+  },
+
   updateParticipant: async (eventId, participantId, data, serviceType = null) => {
     return await participantService.updateParticipant(eventId, participantId, data, serviceType);
   },

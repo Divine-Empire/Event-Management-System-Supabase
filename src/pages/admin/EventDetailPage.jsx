@@ -9,7 +9,7 @@ import { computeEventStatus } from '@/utils/eventStatus';
 import { ExcelImportPanel } from '@/components/participants/ExcelImportPanel';
 import { 
   ArrowLeft, Calendar, Copy, Check, Users, Trophy, PlayCircle, 
-  Upload, Search, Trash2, Download, ExternalLink, ShieldCheck, UserCheck, Gift, Edit, X, Save,
+  Upload, Search, Trash2, Download, ExternalLink, ShieldCheck, UserCheck, UserX, Gift, Edit, X, Save,
   CheckCircle2, Clock, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -51,6 +51,13 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
   const [copied, setCopied] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL'); // ALL, PARTICIPATING, NOT_PARTICIPATING, JOINED, WINNER
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
+  // Clear selection on filter, search or service tab change
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [filter, selectedService, search]);
 
   const loadData = async () => {
     if (!id) return;
@@ -154,6 +161,55 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
       await loadData();
       toast.success('Participant deleted successfully');
     }
+  };
+
+  const handleSelectAll = (selectableList) => {
+    const selectableIds = selectableList.map(p => p.id);
+    const allSelected = selectableIds.length > 0 && selectableIds.every(pId => selectedIds.includes(pId));
+    if (allSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(selectableIds);
+    }
+  };
+
+  const handleToggleSelectRow = (pId) => {
+    setSelectedIds(prev => 
+      prev.includes(pId) ? prev.filter(id => id !== pId) : [...prev, pId]
+    );
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedIds.length === 0) return;
+    if (computedStatus === 'ENDED') {
+      toast.error('Cannot change participation status after event has ended.');
+      return;
+    }
+    await participantStorage.bulkUpdateParticipation(event.id, selectedIds, true);
+    toast.success(`Approved ${selectedIds.length} participant(s)`);
+    setSelectedIds([]);
+    await loadData();
+  };
+
+  const handleBulkUnapprove = async () => {
+    if (selectedIds.length === 0) return;
+    if (computedStatus === 'ENDED') {
+      toast.error('Cannot change participation status after event has ended.');
+      return;
+    }
+    await participantStorage.bulkUpdateParticipation(event.id, selectedIds, false);
+    toast.success(`Marked ${selectedIds.length} participant(s) as Not Participating`);
+    setSelectedIds([]);
+    await loadData();
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    await participantStorage.bulkDeleteParticipants(event.id, selectedIds);
+    toast.success(`Deleted ${selectedIds.length} participant(s)`);
+    setSelectedIds([]);
+    setBulkDeleteConfirmOpen(false);
+    await loadData();
   };
 
   const handleSaveParticipantEdit = async (pId, updateData) => {
@@ -587,18 +643,82 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
             </div>
           )}
 
+          {/* Bulk Action Bar */}
+          {!filter.includes('JOINED') && filter !== 'WINNER' && selectedIds.length > 0 && (
+            <div className="w-full bg-slate-900 text-white p-3 rounded-2xl border border-blue-800 shadow-md flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5">
+                <span className="bg-blue-600 text-white font-extrabold text-xs px-3 py-1 rounded-xl shadow-xs">
+                  {selectedIds.length} Selected
+                </span>
+                <span className="text-xs text-slate-300 font-medium">Bulk Participant Actions:</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleBulkApprove}
+                  disabled={computedStatus === 'ENDED'}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <UserCheck size={14} /> Approve Selected
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkUnapprove}
+                  disabled={computedStatus === 'ENDED'}
+                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <UserX size={14} /> Not Approve Selected
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteConfirmOpen(true)}
+                  className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Trash2 size={14} /> Delete Selected
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  title="Deselect All"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Participants Table */}
           {(() => {
             const isCleanView = filter === 'JOINED' || filter === 'WINNER';
-            const showLuckyNumber = true; // Always show Lucky Number column across ALL tabs
+            const showCheckboxes = !isCleanView;
             const showWinnerRank = filter === 'WINNER';
-            const totalCols = 4 + 1 + (!isCleanView ? 2 : 0) + (showWinnerRank ? 1 : 0);
+            
+            const selectableParticipants = filteredParticipants.filter(p => !Boolean(p.joinedAt || p.joined_at));
+            const isAllSelected = selectableParticipants.length > 0 && selectableParticipants.every(p => selectedIds.includes(p.id));
+            const totalCols = (showCheckboxes ? 1 : 0) + 4 + 1 + (!isCleanView ? 2 : 0) + (showWinnerRank ? 1 : 0);
 
             return (
               <div className="border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-[480px] text-xs shadow-xs w-full max-w-full">
                 <table className="w-full min-w-[750px] text-left border-collapse">
                   <thead className="bg-slate-50 text-slate-700 font-extrabold border-b border-slate-200 sticky top-0 z-10 shadow-xs">
                     <tr>
+                      {showCheckboxes && (
+                        <th className="p-3.5 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isAllSelected}
+                            disabled={selectableParticipants.length === 0}
+                            onChange={() => handleSelectAll(selectableParticipants)}
+                            className="w-4 h-4 accent-blue-600 rounded cursor-pointer disabled:opacity-40"
+                            title={isAllSelected ? 'Deselect All' : 'Select All'}
+                          />
+                        </th>
+                      )}
                       <th className="p-3.5">Service Type</th>
                       <th className="p-3.5">Invoice No</th>
                       <th className="p-3.5">Customer Name</th>
@@ -621,93 +741,111 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
                         </td>
                       </tr>
                     ) : (
-                      filteredParticipants.map(p => (
-                        <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${
-                          p.serviceType === 'TOTAL_STATION' ? 'border-l-4 border-l-emerald-500' : 'border-l-4 border-l-blue-600'
-                        }`}>
-                          <td className="p-3.5">
-                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold border ${
-                              p.serviceType === 'TOTAL_STATION'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-blue-50 text-blue-900 border-blue-200'
-                            }`}>
-                              {p.serviceType === 'TOTAL_STATION' ? 'Total Station' : 'NABL Calibration'}
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-mono font-bold text-slate-800">#{p.invoiceNumber || p.invoiceNo}</td>
-                          <td className="p-3.5 font-bold text-slate-900">{p.customerName || p.name}</td>
-                          <td className="p-3.5 text-slate-600 font-medium">{p.mobile || p.phone}</td>
-                          
-                          {/* Lucky Number */}
-                          <td className="p-3.5">
-                            {p.luckyNumber ? (
-                              <span className="px-2.5 py-1 rounded-lg bg-purple-100 text-purple-900 font-mono font-black border border-purple-200 text-xs shadow-2xs">
-                                #{p.luckyNumber}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 font-medium text-[11px]">—</span>
+                      filteredParticipants.map(p => {
+                        const isRowSelected = selectedIds.includes(p.id);
+                        const isJoined = Boolean(p.joinedAt || p.joined_at);
+
+                        return (
+                          <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${
+                            isRowSelected ? 'bg-blue-50/60' : ''
+                          } ${
+                            p.serviceType === 'TOTAL_STATION' ? 'border-l-4 border-l-emerald-500' : 'border-l-4 border-l-blue-600'
+                          }`}>
+                            {showCheckboxes && (
+                              <td className="p-3.5 w-10 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isRowSelected}
+                                  disabled={isJoined || computedStatus === 'ENDED'}
+                                  onChange={() => handleToggleSelectRow(p.id)}
+                                  className="w-4 h-4 accent-blue-600 rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                />
+                              </td>
                             )}
-                          </td>
-
-                          {/* Participate Toggle Button */}
-                          {!isCleanView && (
                             <td className="p-3.5">
-                              <button
-                                type="button"
-                                disabled={Boolean(p.joinedAt || p.joined_at) || computedStatus === 'ENDED'}
-                                onClick={() => handleToggleParticipation(p.id, p.serviceType)}
-                                title={computedStatus === 'ENDED' ? 'Participation status cannot be changed for ended events' : (p.joinedAt || p.joined_at) ? 'Participation locked (participant has joined)' : p.participating ? 'Click to mark as Not Participating' : 'Click to mark as Participating'}
-                                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                  (Boolean(p.joinedAt || p.joined_at) || computedStatus === 'ENDED')
-                                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300 opacity-60'
-                                    : p.participating
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                                    : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold'
-                                }`}
-                              >
-                                <UserCheck size={14} />
-                                {p.participating ? 'Participating' : 'Approve'}
-                              </button>
+                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold border ${
+                                p.serviceType === 'TOTAL_STATION'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-blue-50 text-blue-900 border-blue-200'
+                              }`}>
+                                {p.serviceType === 'TOTAL_STATION' ? 'Total Station' : 'NABL Calibration'}
+                              </span>
                             </td>
-                          )}
-
-                          {/* Winner Rank */}
-                          {showWinnerRank && (
+                            <td className="p-3.5 font-mono font-bold text-slate-800">#{p.invoiceNumber || p.invoiceNo}</td>
+                            <td className="p-3.5 font-bold text-slate-900">{p.customerName || p.name}</td>
+                            <td className="p-3.5 text-slate-600 font-medium">{p.mobile || p.phone}</td>
+                            
+                            {/* Lucky Number */}
                             <td className="p-3.5">
-                              {p.winnerRank || p.rank ? (
-                                <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-2.5 py-1 rounded-xl text-xs inline-flex items-center gap-1 shadow-xs">
-                                  🏆 Rank {p.winnerRank || p.rank}
+                              {p.luckyNumber ? (
+                                <span className="px-2.5 py-1 rounded-lg bg-purple-100 text-purple-900 font-mono font-black border border-purple-200 text-xs shadow-2xs">
+                                  #{p.luckyNumber}
                                 </span>
                               ) : (
                                 <span className="text-slate-400 font-medium text-[11px]">—</span>
                               )}
                             </td>
-                          )}
 
-                          {!isCleanView && (
-                            <td className="p-3.5 text-right">
-                              <div className="flex items-center justify-end gap-1">
+                            {/* Participate Toggle Button */}
+                            {!isCleanView && (
+                              <td className="p-3.5">
                                 <button
                                   type="button"
-                                  onClick={() => setEditingParticipant(p)}
-                                  className="p-1.5 text-slate-500 hover:text-blue-900 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                                  title="Edit Participant Details"
+                                  disabled={isJoined || computedStatus === 'ENDED'}
+                                  onClick={() => handleToggleParticipation(p.id, p.serviceType)}
+                                  title={computedStatus === 'ENDED' ? 'Participation status cannot be changed for ended events' : isJoined ? 'Participation locked (participant has joined)' : p.participating ? 'Click to mark as Not Participating' : 'Click to mark as Participating'}
+                                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    (isJoined || computedStatus === 'ENDED')
+                                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300 opacity-60'
+                                      : p.participating
+                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                      : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold'
+                                  }`}
                                 >
-                                  <Edit size={15} />
+                                  <UserCheck size={14} />
+                                  {p.participating ? 'Participating' : 'Approve'}
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => promptDeleteParticipant(p)}
-                                  className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer transition-colors"
-                                  title="Delete Participant"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      ))
+                              </td>
+                            )}
+
+                            {/* Winner Rank */}
+                            {showWinnerRank && (
+                              <td className="p-3.5">
+                                {p.winnerRank || p.rank ? (
+                                  <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-2.5 py-1 rounded-xl text-xs inline-flex items-center gap-1 shadow-xs">
+                                    🏆 Rank {p.winnerRank || p.rank}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 font-medium text-[11px]">—</span>
+                                )}
+                              </td>
+                            )}
+
+                            {!isCleanView && (
+                              <td className="p-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingParticipant(p)}
+                                    className="p-1.5 text-slate-500 hover:text-blue-900 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
+                                    title="Edit Participant Details"
+                                  >
+                                    <Edit size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => promptDeleteParticipant(p)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer transition-colors"
+                                    title="Delete Participant"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -717,7 +855,25 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
         </div>
       )}
 
+      <ConfirmModal
+        isOpen={deleteParticipantConfirm.isOpen}
+        title="Delete Participant"
+        message={`Are you sure you want to delete "${deleteParticipantConfirm.customerName}"? This operation cannot be undone.`}
+        confirmText="Delete"
+        confirmVariant="danger"
+        onConfirm={handleConfirmDeleteParticipant}
+        onClose={() => setDeleteParticipantConfirm({ isOpen: false, pId: null, serviceType: null, customerName: '' })}
+      />
 
+      <ConfirmModal
+        isOpen={bulkDeleteConfirmOpen}
+        title="Bulk Delete Participants"
+        message={`Are you sure you want to delete ${selectedIds.length} selected participant(s)? This operation cannot be undone.`}
+        confirmText="Delete Selected"
+        confirmVariant="danger"
+        onConfirm={handleConfirmBulkDelete}
+        onClose={() => setBulkDeleteConfirmOpen(false)}
+      />
 
       {/* Edit Participant Popup Modal */}
       {editingParticipant && (
@@ -728,18 +884,6 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
           onSave={handleSaveParticipantEdit}
         />
       )}
-
-      {/* Delete Participant Confirm Modal */}
-      <ConfirmModal
-        isOpen={deleteParticipantConfirm.isOpen}
-        title="Delete Participant"
-        message={`Are you sure you want to delete participant "${deleteParticipantConfirm.customerName || ''}"? This action cannot be undone.`}
-        confirmText="Delete Participant"
-        cancelText="Cancel"
-        type="danger"
-        onConfirm={handleConfirmDeleteParticipant}
-        onClose={() => setDeleteParticipantConfirm({ isOpen: false, pId: null, serviceType: null, customerName: '' })}
-      />
     </div>
   );
 };

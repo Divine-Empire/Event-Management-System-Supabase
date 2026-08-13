@@ -468,6 +468,35 @@ export const participantService = {
     return await participantService.getParticipants(eventId, serviceType);
   },
 
+  bulkUpdateParticipation: async (eventId, participantIds = [], targetStatus) => {
+    if (!eventId || !Array.isArray(participantIds) || participantIds.length === 0) return [];
+
+    try {
+      await supabase
+        .from('event_participants')
+        .update({ participating: Boolean(targetStatus) })
+        .in('id', participantIds)
+        .is('joined_at', null);
+    } catch (err) {
+      console.error('bulkUpdateParticipation exception:', err);
+    }
+    return await participantService.getParticipants(eventId);
+  },
+
+  bulkDeleteParticipants: async (eventId, participantIds = []) => {
+    if (!eventId || !Array.isArray(participantIds) || participantIds.length === 0) return [];
+
+    try {
+      await supabase
+        .from('event_participants')
+        .delete()
+        .in('id', participantIds);
+    } catch (err) {
+      console.error('bulkDeleteParticipants exception:', err);
+    }
+    return await participantService.getParticipants(eventId);
+  },
+
   // --- Winners Functionality ---
   getWinners: async (eventId, serviceType = null) => {
     if (!eventId) return [];
