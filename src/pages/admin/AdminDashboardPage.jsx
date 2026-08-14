@@ -14,7 +14,7 @@ export const AdminDashboardPage = () => {
 
   const totalEvents = eventsList.length;
   const totalImported = participants.length;
-  const totalJoined = participants.filter(p => p.joined).length;
+  const totalJoined = participants.filter(p => Boolean(p.joined)).length;
   const totalWinners = winners.length;
 
   return (

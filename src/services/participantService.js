@@ -580,10 +580,41 @@ export const participantService = {
     return await participantService.getParticipants(eventId, serviceType);
   },
 
-  // --- Winners Functionality ---
   getWinners: async (eventId, serviceType = null) => {
     if (!eventId) return [];
     try {
+      if (!serviceType || String(serviceType).toUpperCase() === 'ALL') {
+        let { data, error } = await supabase
+          .from('event_participants')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('winner', true)
+          .order('winner_rank', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          return data.map(p => mapParticipantFromDb(p));
+        }
+
+        // Fallback: query both sub-tables
+        const { data: nablData } = await supabase
+          .from('event_participants_nabl')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('winner', true);
+
+        const { data: tsData } = await supabase
+          .from('event_participants_ts')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('winner', true);
+
+        const combined = [
+          ...(nablData || []).map(p => ({ ...p, service_type: 'NABL' })),
+          ...(tsData || []).map(p => ({ ...p, service_type: 'TOTAL_STATION' }))
+        ];
+        return combined.map(p => mapParticipantFromDb(p));
+      }
+
       const sType = normalizeServiceType(serviceType);
       let query = supabase
         .from('event_participants')
