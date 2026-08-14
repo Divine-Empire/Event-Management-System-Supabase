@@ -53,10 +53,13 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
   const [filter, setFilter] = useState('ALL'); // ALL, PARTICIPATING, NOT_PARTICIPATING, JOINED, WINNER
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
 
-  // Clear selection on filter, search or service tab change
+  // Clear selection & reset page on filter, search or service tab change
   useEffect(() => {
     setSelectedIds([]);
+    setCurrentPage(1);
   }, [filter, selectedService, search]);
 
   const loadData = async () => {
@@ -101,14 +104,8 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
       )
       .subscribe();
 
-    // 2. Fallback polling interval every 3 seconds for continuous sync
-    const pollInterval = setInterval(() => {
-      loadData();
-    }, 3000);
-
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(pollInterval);
     };
   }, [id]);
 
@@ -717,46 +714,54 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
             const isAllSelected = selectableParticipants.length > 0 && selectableParticipants.every(p => selectedIds.includes(p.id));
             const totalCols = (showCheckboxes ? 1 : 0) + 4 + 1 + (!isCleanView ? 2 : 0) + (showWinnerRank ? 1 : 0);
 
+            const totalPages = Math.ceil(filteredParticipants.length / ITEMS_PER_PAGE) || 1;
+            const safeCurrentPage = Math.min(currentPage, totalPages);
+            const paginatedParticipants = filteredParticipants.slice(
+              (safeCurrentPage - 1) * ITEMS_PER_PAGE,
+              safeCurrentPage * ITEMS_PER_PAGE
+            );
+
             return (
-              <div className="border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-[480px] text-xs shadow-xs w-full max-w-full">
-                <table className="w-full min-w-[750px] text-left border-collapse">
-                  <thead className="bg-slate-50 text-slate-700 font-extrabold border-b border-slate-200 sticky top-0 z-10 shadow-xs">
-                    <tr>
-                      {showCheckboxes && (
-                        <th className="p-3.5 w-10 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isAllSelected}
-                            disabled={selectableParticipants.length === 0}
-                            onChange={() => handleSelectAll(selectableParticipants)}
-                            className="w-4 h-4 accent-blue-600 rounded cursor-pointer disabled:opacity-40"
-                            title={isAllSelected ? 'Deselect All' : 'Select All'}
-                          />
-                        </th>
-                      )}
-                      <th className="p-3.5">Service Type</th>
-                      <th className="p-3.5">Invoice No</th>
-                      <th className="p-3.5">Customer Name</th>
-                      <th className="p-3.5">Mobile</th>
-                      <th className="p-3.5">Lucky Number</th>
-                      {!isCleanView && <th className="p-3.5">Participation Toggle</th>}
-                      {showWinnerRank && <th className="p-3.5">Winner Rank</th>}
-                      {!isCleanView && <th className="p-3.5 text-right">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredParticipants.length === 0 ? (
+              <div className="flex flex-col gap-3">
+                <div className="border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-[480px] text-xs shadow-xs w-full max-w-full">
+                  <table className="w-full min-w-[750px] text-left border-collapse">
+                    <thead className="bg-slate-50 text-slate-700 font-extrabold border-b border-slate-200 sticky top-0 z-10 shadow-xs">
                       <tr>
-                        <td colSpan={totalCols} className="p-12 text-center text-slate-400">
-                          <div className="max-w-sm mx-auto flex flex-col items-center gap-2">
-                            <Users size={32} className="text-slate-300" />
-                            <p className="font-bold text-slate-700">No Participants Found</p>
-                            <p className="text-xs text-slate-400">Customers can register via public link or you can import Excel records directly.</p>
-                          </div>
-                        </td>
+                        {showCheckboxes && (
+                          <th className="p-3.5 w-10 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isAllSelected}
+                              disabled={selectableParticipants.length === 0}
+                              onChange={() => handleSelectAll(selectableParticipants)}
+                              className="w-4 h-4 accent-blue-600 rounded cursor-pointer disabled:opacity-40"
+                              title={isAllSelected ? 'Deselect All' : 'Select All'}
+                            />
+                          </th>
+                        )}
+                        <th className="p-3.5">Service Type</th>
+                        <th className="p-3.5">Invoice No</th>
+                        <th className="p-3.5">Customer Name</th>
+                        <th className="p-3.5">Mobile</th>
+                        <th className="p-3.5">Lucky Number</th>
+                        {!isCleanView && <th className="p-3.5">Participation Toggle</th>}
+                        {showWinnerRank && <th className="p-3.5">Winner Rank</th>}
+                        {!isCleanView && <th className="p-3.5 text-right">Actions</th>}
                       </tr>
-                    ) : (
-                      filteredParticipants.map(p => {
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredParticipants.length === 0 ? (
+                        <tr>
+                          <td colSpan={totalCols} className="p-12 text-center text-slate-400">
+                            <div className="max-w-sm mx-auto flex flex-col items-center gap-2">
+                              <Users size={32} className="text-slate-300" />
+                              <p className="font-bold text-slate-700">No Participants Found</p>
+                              <p className="text-xs text-slate-400">Customers can register via public link or you can import Excel records directly.</p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedParticipants.map(p => {
                         const isRowSelected = selectedIds.includes(p.id);
                         const isJoined = Boolean(p.joinedAt || p.joined_at);
 
@@ -865,8 +870,38 @@ export const EventDetailPage = ({ initialTab = 'overview' }) => {
                   </tbody>
                 </table>
               </div>
-            );
-          })()}
+
+              {filteredParticipants.length > ITEMS_PER_PAGE && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-1 text-xs text-slate-600">
+                  <div>
+                    Showing <span className="font-extrabold text-slate-900">{(safeCurrentPage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-extrabold text-slate-900">{Math.min(safeCurrentPage * ITEMS_PER_PAGE, filteredParticipants.length)}</span> of <span className="font-extrabold text-slate-900">{filteredParticipants.length}</span> entries
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={safeCurrentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-2 font-extrabold text-slate-800">
+                      Page {safeCurrentPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={safeCurrentPage >= totalPages}
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         </div>
       )}
 

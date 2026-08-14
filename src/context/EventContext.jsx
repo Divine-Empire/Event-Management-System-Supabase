@@ -84,14 +84,8 @@ export const EventProvider = ({ children }) => {
       })
       .subscribe();
 
-    // 2-second background ticker to keep time-based status badges (UPCOMING -> ACTIVE -> LIVE) updating in real-time
-    const ticker = setInterval(() => {
-      setEventsList(prev => [...prev]);
-    }, 2000);
-
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(ticker);
     };
   }, [refreshEventContext]);
 
