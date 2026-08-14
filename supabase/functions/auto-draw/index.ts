@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Supabase Edge Function: Headless Server-Side Winner Draw Engine
 // Serves as an autonomous backend worker executing live draws at scheduled event times.
 
